@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
-import { Trash2, Send, MessageCircle } from 'lucide-react'; // Import MessageCircle
+import { Trash2, Send, MessageCircle } from 'lucide-react';
 import { useChatMessages, Message } from '@/hooks/use-chat-messages';
 import UserAvatar from '@/components/UserAvatar';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -30,6 +30,7 @@ const ChatPage = () => {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserName, setSelectedUserName] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null); // Ref for the input field
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { messages, loadingMessages, setMessages, deleteMessage } = useChatMessages({ selectedUserId });
@@ -46,6 +47,13 @@ const ChatPage = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  // Auto-focus the input when selected user changes
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [selectedUserId, selectedUserName]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,9 +212,9 @@ const ChatPage = () => {
                             {isCurrentUser ? `You (${msg.sender_name})` : msg.sender_name}
                           </span>
                           <div
-                            className={`max-w-[70%] p-3 rounded-lg relative group shadow-sm ${ // Added shadow-sm
+                            className={`max-w-[70%] p-3 rounded-lg relative group shadow-sm ${
                               isCurrentUser
-                                ? 'bg-blue-600 text-white' // Slightly darker blue
+                                ? 'bg-blue-600 text-white'
                                 : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                             }`}
                           >
@@ -269,6 +277,7 @@ const ChatPage = () => {
         )}
         <form onSubmit={handleSendMessage} className="flex gap-2">
           <Input
+            ref={inputRef} {/* Attach the ref here */}
             type="text"
             placeholder={selectedUserName ? `Message ${selectedUserName}...` : "Type your message..."}
             value={newMessage}
