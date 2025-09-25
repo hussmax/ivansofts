@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import ProfileForm from '@/components/ProfileForm';
-import UserAvatar from '@/components/UserAvatar'; // Import UserAvatar
+import UserAvatar from '@/components/UserAvatar';
+import AvatarUpload from '@/components/AvatarUpload'; // Import AvatarUpload
 
 const Profile = () => {
   const { user, loading, signOut } = useAuth();
@@ -62,6 +63,7 @@ const Profile = () => {
               <strong>Phone Number:</strong> {user.phone}
             </p>
           )}
+          <AvatarUpload userId={user.id} currentAvatarUrl={user.avatar_url} /> {/* Add AvatarUpload */}
           <ProfileForm />
           <Button onClick={signOut} className="w-full" variant="destructive">
             Logout
