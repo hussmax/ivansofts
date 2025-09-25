@@ -9,7 +9,9 @@ import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import UserSidebar from '@/components/UserSidebar'; // Import UserSidebar
+import UserSidebar from '@/components/UserSidebar';
+import MobileSidebar from '@/components/MobileSidebar'; // Import MobileSidebar
+import { useIsMobile } from '@/hooks/use-mobile'; // Import useIsMobile
 
 interface Message {
   id: string;
@@ -23,7 +25,9 @@ const ChatPage = () => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); // State for mobile sidebar
+  const scrollAreaRef = useRef<HTMLHTMLDivElement>(null);
+  const isMobile = useIsMobile(); // Use the hook
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -89,10 +93,13 @@ const ChatPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
-      <div className="flex flex-col md:flex-row gap-4 w-full max-w-4xl h-[80vh]"> {/* Changed to div and added flex layout */}
-        <Card className="flex-1 flex flex-col"> {/* Chat Card */}
+      <div className="flex flex-col md:flex-row gap-4 w-full max-w-full md:max-w-6xl h-[calc(100vh-2rem)]"> {/* Adjusted max-width and height */}
+        <Card className="flex-1 flex flex-col">
           <CardHeader className="border-b p-4 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
+              {isMobile && ( // Show mobile sidebar toggle only on mobile
+                <MobileSidebar isOpen={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen} />
+              )}
               <Button variant="ghost" size="icon" asChild>
                 <Link to="/dashboard">
                   <ArrowLeft className="h-5 w-5" />
@@ -148,7 +155,7 @@ const ChatPage = () => {
             </form>
           </CardContent>
         </Card>
-        <UserSidebar /> {/* User List Sidebar */}
+        {!isMobile && <UserSidebar />} {/* Show UserSidebar directly on larger screens */}
       </div>
       <MadeWithDyad />
     </div>
