@@ -16,23 +16,31 @@ interface OnlineUser {
   avatar_url?: string | null; // Add avatar_url to OnlineUser
 }
 
+interface TypingUser {
+  id: string;
+  display_name: string;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: CustomUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
   onlineUsers: OnlineUser[];
+  typingUsers: TypingUser[]; // New state for typing users
   updateUserDisplayName: (newDisplayName: string) => void;
   updateUserAvatar: (newAvatarUrl: string) => void; // New function for avatar
+  sendTypingStatus: (isTyping: boolean, receiverId?: string | null) => Promise<void>; // New function to send typing status
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider = ({ children }: { ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]); // Initialize typingUsers state
   const navigate = useNavigate();
 
   const fetchUserProfile = async (userId: string) => {
@@ -86,61 +94,97 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // New useEffect for presence
+  // Presence and Typing Indicator Logic
   useEffect(() => {
-    if (user) {
-      const channel = supabase.channel('online-users', {
-        config: {
-          presence: {
-            key: user.id, // Use user ID as the presence key
-          },
-        },
-      });
+    if (!user) {
+      setOnlineUsers([]);
+      setTypingUsers([]);
+      return;
+    }
 
-      const updateOnlineUsersState = (state: any) => {
-        const currentOnlineUsers: OnlineUser[] = [];
-        for (const userId in state) {
-          if (state[userId].length > 0) {
-            const userPresence = state[userId][0] as { user_id: string; display_name: string; avatar_url?: string | null };
-            currentOnlineUsers.push({
+    const globalChannel = supabase.channel('global-presence-and-typing', {
+      config: {
+        presence: {
+          key: user.id,
+        },
+      },
+    });
+
+    const updateOnlineUsersState = (state: any) => {
+      const currentOnlineUsers: OnlineUser[] = [];
+      for (const userId in state) {
+        if (state[userId].length > 0) {
+          const userPresence = state[userId][0] as { user_id: string; display_name: string; avatar_url?: string | null };
+          currentOnlineUsers.push({
+            id: userPresence.user_id,
+            display_name: userPresence.display_name,
+            avatar_url: userPresence.avatar_url,
+          });
+        }
+      }
+      setOnlineUsers(currentOnlineUsers);
+    };
+
+    const updateTypingUsersState = (state: any) => {
+      const currentTypingUsers: TypingUser[] = [];
+      for (const userId in state) {
+        if (state[userId].length > 0) {
+          const userPresence = state[userId][0] as { user_id: string; display_name: string; is_typing: boolean };
+          if (userPresence.is_typing && userPresence.user_id !== user.id) {
+            currentTypingUsers.push({
               id: userPresence.user_id,
               display_name: userPresence.display_name,
-              avatar_url: userPresence.avatar_url,
             });
           }
         }
-        setOnlineUsers(currentOnlineUsers);
-      };
+      }
+      setTypingUsers(currentTypingUsers);
+    };
 
-      channel.on('presence', { event: 'sync' }, () => {
-        updateOnlineUsersState(channel.presenceState());
-      });
+    globalChannel.on('presence', { event: 'sync' }, () => {
+      updateOnlineUsersState(globalChannel.presenceState());
+      updateTypingUsersState(globalChannel.presenceState());
+    });
 
-      channel.on('presence', { event: 'join' }, ({ newPresences }) => {
-        updateOnlineUsersState(channel.presenceState());
-      });
+    globalChannel.on('presence', { event: 'join' }, ({ newPresences }) => {
+      updateOnlineUsersState(globalChannel.presenceState());
+      updateTypingUsersState(globalChannel.presenceState());
+    });
 
-      channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        updateOnlineUsersState(channel.presenceState());
-      });
+    globalChannel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
+      updateOnlineUsersState(globalChannel.presenceState());
+      updateTypingUsersState(globalChannel.presenceState());
+    });
 
-      channel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({
-            user_id: user.id,
-            display_name: user.display_name || user.phone || 'Anonymous',
-            avatar_url: user.avatar_url || null, // Include avatar_url
-          });
-        }
-      });
+    globalChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await globalChannel.track({
+          user_id: user.id,
+          display_name: user.display_name || user.phone || 'Anonymous',
+          avatar_url: user.avatar_url || null,
+          is_typing: false, // Initial typing status
+        });
+      }
+    });
 
-      return () => {
-        channel.unsubscribe();
-      };
-    } else {
-      setOnlineUsers([]); // Clear online users if no user is logged in
-    }
-  }, [user]); // Re-run when user changes
+    return () => {
+      globalChannel.unsubscribe();
+    };
+  }, [user]);
+
+  const sendTypingStatus = useCallback(async (isTyping: boolean, receiverId?: string | null) => {
+    if (!user) return;
+
+    // For simplicity, we'll use the global channel for typing status for now.
+    // In a more complex app, private chat typing would use a dedicated private channel.
+    const channel = supabase.channel('global-presence-and-typing');
+    await channel.track({
+      user_id: user.id,
+      display_name: user.display_name || user.phone || 'Anonymous',
+      avatar_url: user.avatar_url || null,
+      is_typing: isTyping,
+    });
+  }, [user]);
 
   const signOut = async () => {
     setLoading(true);
@@ -152,6 +196,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(null);
       setUser(null);
       setOnlineUsers([]); // Clear online users on sign out
+      setTypingUsers([]); // Clear typing users on sign out
       navigate("/register"); // Redirect to register page after logout
     }
     setLoading(false);
@@ -176,7 +221,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, signOut, onlineUsers, updateUserDisplayName, updateUserAvatar }}>
+    <AuthContext.Provider value={{ session, user, loading, signOut, onlineUsers, typingUsers, updateUserDisplayName, updateUserAvatar, sendTypingStatus }}>
       {children}
     </AuthContext.Provider>
   );

@@ -14,6 +14,7 @@ import MobileSidebar from '@/components/MobileSidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useChatMessages, Message } from '@/hooks/use-chat-messages';
 import UserAvatar from '@/components/UserAvatar';
+import TypingIndicator from '@/components/TypingIndicator'; // Import TypingIndicator
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,13 +28,14 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const ChatPage = () => {
-  const { user } = useAuth();
+  const { user, typingUsers, sendTypingStatus } = useAuth(); // Get typingUsers and sendTypingStatus from AuthContext
   const [newMessage, setNewMessage] = useState('');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserName, setSelectedUserName] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { messages, loadingMessages, setMessages, deleteMessage } = useChatMessages({ selectedUserId });
 
@@ -53,6 +55,12 @@ const ChatPage = () => {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim() === '' || !user) return;
+
+    // Clear typing status after sending message
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    await sendTypingStatus(false, selectedUserId);
 
     if (selectedUserId) {
       // Send private message
@@ -92,6 +100,32 @@ const ChatPage = () => {
     setIsMobileSidebarOpen(false); // Close mobile sidebar after selection
     setMessages([]); // Clear messages when switching chat
   };
+
+  const handleNewMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+
+    if (!user) return;
+
+    // Send typing status
+    sendTypingStatus(true, selectedUserId);
+
+    // Clear previous timeout if exists
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set a new timeout to send 'not typing' after a delay
+    typingTimeoutRef.current = setTimeout(() => {
+      sendTypingStatus(false, selectedUserId);
+    }, 3000); // 3 seconds delay
+  };
+
+  // Filter typing users for the current chat context
+  const currentChatTypingUsers = typingUsers.filter(
+    (typingUser) =>
+      typingUser.id !== user?.id && // Exclude current user
+      (selectedUserId === null || typingUser.id === selectedUserId) // Only show for selected user in private chat, or all in global
+  );
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
@@ -206,12 +240,19 @@ const ChatPage = () => {
                 )}
               </div>
             </ScrollArea>
+            {currentChatTypingUsers.length > 0 && (
+              <div className="mb-2">
+                {currentChatTypingUsers.map((typingUser) => (
+                  <TypingIndicator key={typingUser.id} userName={typingUser.display_name} />
+                ))}
+              </div>
+            )}
             <form onSubmit={handleSendMessage} className="flex gap-2">
               <Input
                 type="text"
                 placeholder={selectedUserName ? `Message ${selectedUserName}...` : "Type your message..."}
                 value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
+                onChange={handleNewMessageChange} // Use the new handler
                 className="flex-1"
                 disabled={!user}
               />
