@@ -8,6 +8,7 @@ import UserSidebar from '@/components/UserSidebar';
 import MobileSidebar from '@/components/MobileSidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/context/AuthContext';
+import { MadeWithDyad } from './made-with-dyad'; // Ensure MadeWithDyad is imported
 
 interface ChatLayoutProps {
   children: React.ReactNode;
@@ -41,7 +42,7 @@ const ChatLayout = ({ children, selectedUserId, selectedUserName, onSelectUser }
                 </Link>
               </Button>
               <CardTitle className="text-2xl">
-                {selectedUserName ? `Chat with ${selectedUserName}` : 'Global Chat'}
+                {isMobile ? 'Chat' : (selectedUserName ? `Chat with ${selectedUserName}` : 'Global Chat')}
               </CardTitle>
             </div>
             <div className="flex items-center gap-2">
