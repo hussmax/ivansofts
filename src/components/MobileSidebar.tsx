@@ -7,9 +7,11 @@ import UserSidebar from './UserSidebar';
 interface MobileSidebarProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  onSelectUser: (userId: string | null, userName: string | null) => void; // New prop
+  selectedUserId: string | null; // New prop
 }
 
-const MobileSidebar = ({ isOpen, onOpenChange }: MobileSidebarProps) => {
+const MobileSidebar = ({ isOpen, onOpenChange, onSelectUser, selectedUserId }: MobileSidebarProps) => {
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetTrigger asChild>
@@ -22,7 +24,7 @@ const MobileSidebar = ({ isOpen, onOpenChange }: MobileSidebarProps) => {
         <SheetHeader className="p-4 border-b">
           <SheetTitle>Users</SheetTitle>
         </SheetHeader>
-        <UserSidebar />
+        <UserSidebar onSelectUser={onSelectUser} selectedUserId={selectedUserId} />
       </SheetContent>
     </Sheet>
   );

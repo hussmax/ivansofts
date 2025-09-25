@@ -10,8 +10,8 @@ import { showError } from '@/utils/toast';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import UserSidebar from '@/components/UserSidebar';
-import MobileSidebar from '@/components/MobileSidebar'; // Import MobileSidebar
-import { useIsMobile } from '@/hooks/use-mobile'; // Import useIsMobile
+import MobileSidebar from '@/components/MobileSidebar';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Message {
   id: string;
@@ -25,9 +25,11 @@ const ChatPage = () => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); // State for mobile sidebar
-  const scrollAreaRef = useRef<HTMLHTMLDivElement>(null);
-  const isMobile = useIsMobile(); // Use the hook
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null); // New state for selected user ID
+  const [selectedUserName, setSelectedUserName] = useState<string | null>(null); // New state for selected user name
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -91,21 +93,35 @@ const ChatPage = () => {
     }
   };
 
+  const handleSelectUser = (userId: string | null, userName: string | null) => {
+    setSelectedUserId(userId);
+    setSelectedUserName(userName);
+    setIsMobileSidebarOpen(false); // Close mobile sidebar after selection
+    // In a later step, we will adjust message fetching/sending based on selectedUserId
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
-      <div className="flex flex-col md:flex-row gap-4 w-full max-w-full md:max-w-6xl h-[calc(100vh-2rem)]"> {/* Adjusted max-width and height */}
+      <div className="flex flex-col md:flex-row gap-4 w-full max-w-full md:max-w-6xl h-[calc(100vh-2rem)]">
         <Card className="flex-1 flex flex-col">
           <CardHeader className="border-b p-4 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
-              {isMobile && ( // Show mobile sidebar toggle only on mobile
-                <MobileSidebar isOpen={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen} />
+              {isMobile && (
+                <MobileSidebar
+                  isOpen={isMobileSidebarOpen}
+                  onOpenChange={setIsMobileSidebarOpen}
+                  onSelectUser={handleSelectUser} // Pass handler to MobileSidebar
+                  selectedUserId={selectedUserId} // Pass selected user to MobileSidebar
+                />
               )}
               <Button variant="ghost" size="icon" asChild>
                 <Link to="/dashboard">
                   <ArrowLeft className="h-5 w-5" />
                 </Link>
               </Button>
-              <CardTitle className="text-2xl">Global Chat</CardTitle>
+              <CardTitle className="text-2xl">
+                {selectedUserName ? `Chat with ${selectedUserName}` : 'Global Chat'}
+              </CardTitle>
             </div>
             {user && (
               <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -145,7 +161,7 @@ const ChatPage = () => {
             <form onSubmit={handleSendMessage} className="flex gap-2">
               <Input
                 type="text"
-                placeholder="Type your message..."
+                placeholder={selectedUserName ? `Message ${selectedUserName}...` : "Type your message..."}
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 className="flex-1"
@@ -155,7 +171,12 @@ const ChatPage = () => {
             </form>
           </CardContent>
         </Card>
-        {!isMobile && <UserSidebar />} {/* Show UserSidebar directly on larger screens */}
+        {!isMobile && (
+          <UserSidebar
+            onSelectUser={handleSelectUser}
+            selectedUserId={selectedUserId}
+          />
+        )}
       </div>
       <MadeWithDyad />
     </div>
