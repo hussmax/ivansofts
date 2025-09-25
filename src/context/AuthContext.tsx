@@ -13,6 +13,7 @@ interface CustomUser extends User {
 interface OnlineUser {
   id: string;
   display_name: string;
+  avatar_url?: string | null; // Add avatar_url to OnlineUser
 }
 
 interface AuthContextType {
@@ -27,7 +28,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { ReactNode }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,32 +97,40 @@ export const AuthProvider = ({ children }: { ReactNode }) => {
         },
       });
 
-      channel.on('presence', { event: 'sync' }, () => {
-        const newState = channel.presenceState();
+      const updateOnlineUsersState = (state: any) => {
         const currentOnlineUsers: OnlineUser[] = [];
-        for (const userId in newState) {
-          if (newState[userId].length > 0) {
-            const userPresence = newState[userId][0] as { user_id: string; display_name: string };
-            currentOnlineUsers.push({ id: userPresence.user_id, display_name: userPresence.display_name });
+        for (const userId in state) {
+          if (state[userId].length > 0) {
+            const userPresence = state[userId][0] as { user_id: string; display_name: string; avatar_url?: string | null };
+            currentOnlineUsers.push({
+              id: userPresence.user_id,
+              display_name: userPresence.display_name,
+              avatar_url: userPresence.avatar_url,
+            });
           }
         }
         setOnlineUsers(currentOnlineUsers);
+      };
+
+      channel.on('presence', { event: 'sync' }, () => {
+        updateOnlineUsersState(channel.presenceState());
       });
 
       channel.on('presence', { event: 'join' }, ({ newPresences }) => {
-        setOnlineUsers((prev) => [
-          ...prev,
-          ...newPresences.map((p: any) => ({ id: p.key, display_name: p.display_name })),
-        ]);
+        updateOnlineUsersState(channel.presenceState());
       });
 
       channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        setOnlineUsers((prev) => prev.filter((onlineUser) => !leftPresences.some((p: any) => p.key === onlineUser.id)));
+        updateOnlineUsersState(channel.presenceState());
       });
 
       channel.subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await channel.track({ user_id: user.id, display_name: user.display_name || user.phone || 'Anonymous' });
+          await channel.track({
+            user_id: user.id,
+            display_name: user.display_name || user.phone || 'Anonymous',
+            avatar_url: user.avatar_url || null, // Include avatar_url
+          });
         }
       });
 
