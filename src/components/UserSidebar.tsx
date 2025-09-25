@@ -3,11 +3,11 @@ import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { User, Search } from 'lucide-react'; // Import Search icon
+import { User, Search } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import UserAvatar from './UserAvatar';
-import { Input } from '@/components/ui/input'; // Import Input component
+import { Input } from '@/components/ui/input';
 
 interface UserProfile {
   id: string;
@@ -21,10 +21,10 @@ interface UserSidebarProps {
 }
 
 const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]); // Store all fetched users
-  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]); // Store filtered users
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState(''); // State for search input
+  const [searchTerm, setSearchTerm] = useState('');
   const { onlineUsers, user: currentUser } = useAuth();
 
   useEffect(() => {
@@ -40,7 +40,7 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
       } else {
         const usersWithoutCurrentUser = data?.filter(profile => profile.id !== currentUser?.id) || [];
         setAllUsers(usersWithoutCurrentUser);
-        setFilteredUsers(usersWithoutCurrentUser); // Initialize filtered users with all users
+        setFilteredUsers(usersWithoutCurrentUser);
       }
       setLoading(false);
     };
@@ -63,7 +63,6 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
     };
   }, [currentUser]);
 
-  // Effect to filter users based on search term
   useEffect(() => {
     if (searchTerm.trim() === '') {
       setFilteredUsers(allUsers);
@@ -75,6 +74,13 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
       );
     }
   }, [searchTerm, allUsers]);
+
+  const onlineFilteredUsers = filteredUsers.filter(userProfile =>
+    onlineUsers.some(onlineUser => onlineUser.id === userProfile.id)
+  );
+  const offlineFilteredUsers = filteredUsers.filter(userProfile =>
+    !onlineUsers.some(onlineUser => onlineUser.id === userProfile.id)
+  );
 
   return (
     <Card className="w-full md:w-64 h-full flex flex-col">
@@ -108,32 +114,68 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
                 <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <span className="font-medium">Global Chat</span>
               </div>
-              {filteredUsers.length === 0 ? (
+
+              {onlineFilteredUsers.length > 0 && (
+                <>
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-4 mb-1">Online</h3>
+                  {onlineFilteredUsers.map((userProfile) => {
+                    const isSelected = selectedUserId === userProfile.id;
+                    return (
+                      <div
+                        key={userProfile.id}
+                        className={cn(
+                          "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700",
+                          isSelected && "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                        )}
+                        onClick={() => onSelectUser(userProfile.id, userProfile.display_name)}
+                      >
+                        <div className="h-2 w-2 rounded-full bg-green-500" />
+                        <UserAvatar
+                          src={userProfile.avatar_url}
+                          alt={userProfile.display_name}
+                          fallback={userProfile.display_name}
+                          className="h-6 w-6"
+                        />
+                        <span className="font-medium">{userProfile.display_name}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {offlineFilteredUsers.length > 0 && (
+                <>
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-4 mb-1">Offline</h3>
+                  {offlineFilteredUsers.map((userProfile) => {
+                    const isSelected = selectedUserId === userProfile.id;
+                    return (
+                      <div
+                        key={userProfile.id}
+                        className={cn(
+                          "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700",
+                          isSelected && "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                        )}
+                        onClick={() => onSelectUser(userProfile.id, userProfile.display_name)}
+                      >
+                        <div className="h-2 w-2 rounded-full bg-gray-400" />
+                        <UserAvatar
+                          src={userProfile.avatar_url}
+                          alt={userProfile.display_name}
+                          fallback={userProfile.display_name}
+                          className="h-6 w-6"
+                        />
+                        <span className="font-medium">{userProfile.display_name}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {onlineFilteredUsers.length === 0 && offlineFilteredUsers.length === 0 && searchTerm.trim() !== '' && (
+                <p className="text-center text-gray-500 dark:text-gray-400">No users found matching your search.</p>
+              )}
+              {onlineFilteredUsers.length === 0 && offlineFilteredUsers.length === 0 && searchTerm.trim() === '' && (
                 <p className="text-center text-gray-500 dark:text-gray-400">No other users found.</p>
-              ) : (
-                filteredUsers.map((userProfile) => {
-                  const isOnline = onlineUsers.some(onlineUser => onlineUser.id === userProfile.id);
-                  const isSelected = selectedUserId === userProfile.id;
-                  return (
-                    <div
-                      key={userProfile.id}
-                      className={cn(
-                        "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700",
-                        isSelected && "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
-                      )}
-                      onClick={() => onSelectUser(userProfile.id, userProfile.display_name)}
-                    >
-                      <div className={`h-2 w-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
-                      <UserAvatar
-                        src={userProfile.avatar_url}
-                        alt={userProfile.display_name}
-                        fallback={userProfile.display_name}
-                        className="h-6 w-6"
-                      />
-                      <span className="font-medium">{userProfile.display_name}</span>
-                    </div>
-                  );
-                })
               )}
             </div>
           </ScrollArea>
