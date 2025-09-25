@@ -47,7 +47,7 @@ const ChatPage = () => {
         behavior: 'smooth',
       });
     }
-  }, []);
+  }, [messages]); // Added messages to dependency array to ensure scroll on new messages
 
   useEffect(() => {
     scrollToBottom();
