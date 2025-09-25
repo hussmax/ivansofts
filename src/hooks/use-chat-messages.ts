@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { showError, showSuccess } from '@/utils/toast';
 import { useAuth } from '@/context/AuthContext';
+import { Reaction } from '@/components/MessageReactions'; // Import Reaction interface
 
 export interface Message {
   id: string;
@@ -13,6 +14,7 @@ export interface Message {
   receiver_id?: string; // Only present for private messages
   is_edited: boolean; // New field to indicate if the message has been edited
   edited_at: string | null; // New field for the last edited timestamp
+  reactions: Reaction[]; // New field for message reactions
 }
 
 interface UseChatMessagesProps {
@@ -40,7 +42,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
       // Fetch private messages
       query = supabase
         .from('private_messages')
-        .select('id, sender_id, receiver_id, content, created_at, is_edited, edited_at, profiles(display_name, avatar_url)') // Select new fields
+        .select('id, sender_id, receiver_id, content, created_at, is_edited, edited_at, profiles(display_name, avatar_url), private_message_reactions(emoji, user_id, profiles(display_name))') // Select new fields including reactions
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id})`)
         .order('created_at', { ascending: false }) // Fetch in reverse order to get latest first
         .range(from, to);
@@ -48,7 +50,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
       // Fetch global messages
       query = supabase
         .from('messages')
-        .select('id, user_id, content, created_at, is_edited, edited_at, profiles(display_name, avatar_url)') // Select new fields
+        .select('id, user_id, content, created_at, is_edited, edited_at, profiles(display_name, avatar_url), message_reactions(emoji, user_id, profiles(display_name))') // Select new fields including reactions
         .order('created_at', { ascending: false }) // Fetch in reverse order to get latest first
         .range(from, to);
     }
@@ -68,8 +70,13 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
         content: msg.content,
         created_at: msg.created_at,
         receiver_id: selectedUserId ? msg.receiver_id : undefined,
-        is_edited: msg.is_edited || false, // Default to false
-        edited_at: msg.edited_at || null, // Default to null
+        is_edited: msg.is_edited || false,
+        edited_at: msg.edited_at || null,
+        reactions: (selectedUserId ? msg.private_message_reactions : msg.message_reactions)?.map((r: any) => ({
+          emoji: r.emoji,
+          user_id: r.user_id,
+          user_display_name: r.profiles?.display_name || 'Anonymous',
+        })) || [],
       })).reverse(); // Reverse back to chronological order
 
       if (append) {
@@ -170,6 +177,60 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     }
   }, [user]);
 
+  const addReaction = useCallback(async (messageId: string, emoji: string) => {
+    if (!user) {
+      showError('You must be logged in to add reactions.');
+      return;
+    }
+
+    let error;
+    if (selectedUserId) {
+      const { error: privateReactionError } = await supabase
+        .from('private_message_reactions')
+        .insert({ message_id: messageId, user_id: user.id, emoji });
+      error = privateReactionError;
+    } else {
+      const { error: globalReactionError } = await supabase
+        .from('message_reactions')
+        .insert({ message_id: messageId, user_id: user.id, emoji });
+      error = globalReactionError;
+    }
+
+    if (error) {
+      showError('Error adding reaction: ' + error.message);
+    }
+  }, [user, selectedUserId]);
+
+  const removeReaction = useCallback(async (messageId: string, emoji: string) => {
+    if (!user) {
+      showError('You must be logged in to remove reactions.');
+      return;
+    }
+
+    let error;
+    if (selectedUserId) {
+      const { error: privateReactionError } = await supabase
+        .from('private_message_reactions')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('user_id', user.id)
+        .eq('emoji', emoji);
+      error = privateReactionError;
+    } else {
+      const { error: globalReactionError } = await supabase
+        .from('message_reactions')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('user_id', user.id)
+        .eq('emoji', emoji);
+      error = globalReactionError;
+    }
+
+    if (error) {
+      showError('Error removing reaction: ' + error.message);
+    }
+  }, [user, selectedUserId]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -180,7 +241,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
 
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('display_name, avatar_url') // Select avatar_url
+        .select('display_name, avatar_url')
         .eq('id', senderId)
         .single();
 
@@ -194,12 +255,13 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
           id: newMsg.id,
           user_id: senderId,
           sender_name: profile?.display_name || 'Anonymous',
-          sender_avatar_url: profile?.avatar_url || null, // Assign avatar_url
+          sender_avatar_url: profile?.avatar_url || null,
           content: newMsg.content,
           created_at: newMsg.created_at,
           receiver_id: newMsg.receiver_id,
           is_edited: newMsg.is_edited || false,
           edited_at: newMsg.edited_at || null,
+          reactions: [], // New messages start with no reactions
         },
       ]);
     };
@@ -226,7 +288,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
                 content: updatedMsg.content,
                 is_edited: updatedMsg.is_edited || false,
                 edited_at: updatedMsg.edited_at || null,
-                sender_name: profile?.display_name || 'Anonymous', // Ensure sender_name is updated if profile changes
+                sender_name: profile?.display_name || 'Anonymous',
                 sender_avatar_url: profile?.avatar_url || null,
               }
             : msg
@@ -237,6 +299,44 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     const handleDeleteMessage = (payload: any) => {
       const deletedMsgId = payload.old.id;
       setMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== deletedMsgId));
+    };
+
+    const handleReactionChange = async (payload: any, isDelete: boolean) => {
+      const reactionData = payload.new || payload.old;
+      const messageId = reactionData.message_id;
+      const reactorId = reactionData.user_id;
+      const emoji = reactionData.emoji;
+
+      const { data: reactorProfile, error } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', reactorId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching reactor profile:', error.message);
+        return;
+      }
+
+      const newReaction: Reaction = {
+        emoji,
+        user_id: reactorId,
+        user_display_name: reactorProfile?.display_name || 'Anonymous',
+      };
+
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) => {
+          if (msg.id === messageId) {
+            const updatedReactions = isDelete
+              ? msg.reactions.filter(
+                  (r) => !(r.user_id === newReaction.user_id && r.emoji === newReaction.emoji)
+                )
+              : [...msg.reactions, newReaction];
+            return { ...msg, reactions: updatedReactions };
+          }
+          return msg;
+        })
+      );
     };
 
     if (selectedUserId) {
@@ -269,6 +369,24 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
           filter: `or(and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id}))`,
         },
         handleDeleteMessage
+      ).on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'private_message_reactions',
+          filter: `or(message_id.in.(select id from private_messages where sender_id = '${user.id}' and receiver_id = '${selectedUserId}'), message_id.in.(select id from private_messages where sender_id = '${selectedUserId}' and receiver_id = '${user.id}'))`,
+        },
+        (payload) => handleReactionChange(payload, false)
+      ).on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'private_message_reactions',
+          filter: `or(message_id.in.(select id from private_messages where sender_id = '${user.id}' and receiver_id = '${selectedUserId}'), message_id.in.(select id from private_messages where sender_id = '${selectedUserId}' and receiver_id = '${user.id}'))`,
+        },
+        (payload) => handleReactionChange(payload, true)
       ).subscribe();
     } else {
       channel = supabase.channel('global-chat-room');
@@ -284,6 +402,14 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
         'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'messages' },
         handleDeleteMessage
+      ).on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'message_reactions' },
+        (payload) => handleReactionChange(payload, false)
+      ).on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'message_reactions' },
+        (payload) => handleReactionChange(payload, true)
       ).subscribe();
     }
 
@@ -294,5 +420,5 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     };
   }, [selectedUserId, user]);
 
-  return { messages, loadingMessages, setMessages, deleteMessage, editMessage, hasMore, loadMoreMessages };
+  return { messages, loadingMessages, setMessages, deleteMessage, editMessage, addReaction, removeReaction, hasMore, loadMoreMessages };
 };
