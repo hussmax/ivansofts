@@ -4,6 +4,7 @@ import { showError } from '@/utils/toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { User } from 'lucide-react'; // For a generic user icon
+import { useAuth } from '@/context/AuthContext'; // Import useAuth
 
 interface UserProfile {
   id: string;
@@ -13,6 +14,7 @@ interface UserProfile {
 const UserSidebar = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const { onlineUsers } = useAuth(); // Get onlineUsers from AuthContext
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -63,12 +65,16 @@ const UserSidebar = () => {
         ) : (
           <ScrollArea className="h-full pr-4">
             <div className="space-y-2">
-              {users.map((userProfile) => (
-                <div key={userProfile.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
-                  <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                  <span className="font-medium">{userProfile.display_name}</span>
-                </div>
-              ))}
+              {users.map((userProfile) => {
+                const isOnline = onlineUsers.includes(userProfile.id); // Check if user is online
+                return (
+                  <div key={userProfile.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <div className={`h-2 w-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} /> {/* Online indicator */}
+                    <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                    <span className="font-medium">{userProfile.display_name}</span>
+                  </div>
+                );
+              })}
             </div>
           </ScrollArea>
         )}

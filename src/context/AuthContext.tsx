@@ -14,6 +14,7 @@ interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  onlineUsers: string[]; // Add onlineUsers to context
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,6 +23,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]); // New state for online users
   const navigate = useNavigate();
 
   const fetchUserProfile = async (userId: string) => {
@@ -75,6 +77,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // New useEffect for presence
+  useEffect(() => {
+    if (user) {
+      const channel = supabase.channel('online-users', {
+        config: {
+          presence: {
+            key: user.id, // Use user ID as the presence key
+          },
+        },
+      });
+
+      channel.on('presence', { event: 'sync' }, () => {
+        const newState = channel.presenceState();
+        const currentOnlineUsers = Object.keys(newState);
+        setOnlineUsers(currentOnlineUsers);
+      });
+
+      channel.on('presence', { event: 'join' }, ({ newPresences }) => {
+        setOnlineUsers((prev) => [...prev, ...newPresences.map((p) => p.key)]);
+      });
+
+      channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        setOnlineUsers((prev) => prev.filter((id) => !leftPresences.some((p) => p.key === id)));
+      });
+
+      channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({ user_id: user.id, display_name: user.display_name || user.phone || 'Anonymous' });
+        }
+      });
+
+      return () => {
+        channel.unsubscribe();
+      };
+    } else {
+      setOnlineUsers([]); // Clear online users if no user is logged in
+    }
+  }, [user]); // Re-run when user changes
+
   const signOut = async () => {
     setLoading(true);
     const { error } = await supabase.auth.signOut();
@@ -84,13 +125,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       showSuccess("Logged out successfully!");
       setSession(null);
       setUser(null);
+      setOnlineUsers([]); // Clear online users on sign out
       navigate("/register"); // Redirect to register page after logout
     }
     setLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user, loading, signOut, onlineUsers }}>
       {children}
     </AuthContext.Provider>
   );
