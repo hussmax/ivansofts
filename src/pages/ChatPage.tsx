@@ -1,36 +1,87 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MadeWithDyad } from '@/components/made-with-dyad';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { showError } from '@/utils/toast';
 
 interface Message {
   id: string;
-  sender: string;
-  text: string;
-  timestamp: string;
+  user_id: string;
+  sender_phone: string;
+  content: string;
+  created_at: string;
 }
 
 const ChatPage = () => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newMessage.trim() === '') return;
+  const scrollToBottom = () => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTo({
+        top: scrollAreaRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  };
 
-    const message: Message = {
-      id: Date.now().toString(),
-      sender: user?.phone || user?.id || 'Anonymous',
-      text: newMessage,
-      timestamp: new Date().toLocaleTimeString(),
+  useEffect(() => {
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        showError('Error fetching messages: ' + error.message);
+      } else {
+        setMessages(data || []);
+      }
     };
 
-    setMessages((prevMessages) => [...prevMessages, message]);
-    setNewMessage('');
+    fetchMessages();
+
+    const channel = supabase
+      .channel('global-chat-room')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          setMessages((prevMessages) => [...prevMessages, payload.new as Message]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newMessage.trim() === '' || !user) return;
+
+    const { error } = await supabase.from('messages').insert({
+      user_id: user.id,
+      sender_phone: user.phone || 'Anonymous',
+      content: newMessage.trim(),
+    });
+
+    if (error) {
+      showError('Error sending message: ' + error.message);
+    } else {
+      setNewMessage('');
+    }
   };
 
   return (
@@ -40,7 +91,7 @@ const ChatPage = () => {
           <CardTitle className="text-2xl">Global Chat</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 p-4 overflow-hidden flex flex-col">
-          <ScrollArea className="flex-1 pr-4 mb-4">
+          <ScrollArea ref={scrollAreaRef} className="flex-1 pr-4 mb-4">
             <div className="space-y-4">
               {messages.length === 0 ? (
                 <p className="text-center text-gray-500 dark:text-gray-400">No messages yet. Start chatting!</p>
@@ -48,18 +99,20 @@ const ChatPage = () => {
                 messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={`flex ${msg.sender === (user?.phone || user?.id || 'Anonymous') ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${msg.user_id === user?.id ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
                       className={`max-w-[70%] p-3 rounded-lg ${
-                        msg.sender === (user?.phone || user?.id || 'Anonymous')
+                        msg.user_id === user?.id
                           ? 'bg-blue-500 text-white'
                           : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                       }`}
                     >
-                      <p className="text-sm font-semibold">{msg.sender}</p>
-                      <p className="text-base">{msg.text}</p>
-                      <p className="text-xs text-right opacity-75 mt-1">{msg.timestamp}</p>
+                      <p className="text-sm font-semibold">{msg.sender_phone}</p>
+                      <p className="text-base">{msg.content}</p>
+                      <p className="text-xs text-right opacity-75 mt-1">
+                        {new Date(msg.created_at).toLocaleTimeString()}
+                      </p>
                     </div>
                   </div>
                 ))
@@ -73,8 +126,9 @@ const ChatPage = () => {
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               className="flex-1"
+              disabled={!user}
             />
-            <Button type="submit">Send</Button>
+            <Button type="submit" disabled={!user}>Send</Button>
           </form>
         </CardContent>
       </Card>
