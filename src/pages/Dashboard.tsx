@@ -25,6 +25,9 @@ const Dashboard = () => {
             <Button asChild>
               <Link to="/profile">View Profile</Link>
             </Button>
+            <Button asChild> {/* Add button for ChatPage */}
+              <Link to="/chat">Go to Chat</Link>
+            </Button>
             <Button onClick={signOut} variant="outline">
               Logout
             </Button>

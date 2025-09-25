@@ -8,9 +8,10 @@ import NotFound from "./pages/NotFound";
 import Register from "./pages/Register";
 import VerifyOtp from "./pages/VerifyOtp";
 import Profile from "./pages/Profile";
-import Dashboard from "./pages/Dashboard"; // Import the new Dashboard page
+import Dashboard from "./pages/Dashboard";
+import ChatPage from "./pages/ChatPage"; // Import the new ChatPage
 import { AuthProvider } from "./context/AuthContext";
-import ProtectedRoute from "./components/ProtectedRoute"; // Import ProtectedRoute
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -29,7 +30,8 @@ const App = () => (
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
               <Route path="/profile" element={<Profile />} />
-              <Route path="/dashboard" element={<Dashboard />} /> {/* Add route for Dashboard page */}
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/chat" element={<ChatPage />} /> {/* Add route for ChatPage */}
             </Route>
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
