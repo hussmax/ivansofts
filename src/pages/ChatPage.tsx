@@ -21,7 +21,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import ChatLayout from '@/components/ChatLayout'; // Import ChatLayout
+import ChatLayout from '@/components/ChatLayout';
+import { format, isToday, isYesterday } from 'date-fns'; // Import date-fns utilities
 
 const ChatPage = () => {
   const { user, typingUsers, sendTypingStatus } = useAuth();
@@ -107,6 +108,17 @@ const ChatPage = () => {
     }, 3000);
   };
 
+  const formatMessageTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    if (isToday(date)) {
+      return format(date, 'HH:mm');
+    } else if (isYesterday(date)) {
+      return format(date, 'Yesterday HH:mm');
+    } else {
+      return format(date, 'dd/MM/yyyy HH:mm');
+    }
+  };
+
   const currentChatTypingUsers = typingUsers.filter(
     (typingUser) =>
       typingUser.id !== user?.id &&
@@ -157,7 +169,7 @@ const ChatPage = () => {
                       >
                         <p className="text-base">{msg.content}</p>
                         <p className="text-xs text-right opacity-75 mt-1">
-                          {new Date(msg.created_at).toLocaleTimeString()}
+                          {formatMessageTimestamp(msg.created_at)} {/* Use the new formatMessageTimestamp function */}
                         </p>
                         {isCurrentUser && (
                           <AlertDialog>
