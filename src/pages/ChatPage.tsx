@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Send } from 'lucide-react'; // Import Send icon
 import { useChatMessages, Message } from '@/hooks/use-chat-messages';
 import UserAvatar from '@/components/UserAvatar';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -22,7 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import ChatLayout from '@/components/ChatLayout';
-import { format, isToday, isYesterday, isSameDay } from 'date-fns'; // Import isSameDay
+import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 
 const ChatPage = () => {
   const { user, typingUsers, sendTypingStatus } = useAuth();
@@ -273,7 +273,10 @@ const ChatPage = () => {
             className="flex-1"
             disabled={!user}
           />
-          <Button type="submit" disabled={!user}>Send</Button>
+          <Button type="submit" disabled={!user} size="icon"> {/* Added size="icon" */}
+            <Send className="h-4 w-4" />
+            <span className="sr-only">Send message</span> {/* Added for accessibility */}
+          </Button>
         </form>
       </CardContent>
     </ChatLayout>
