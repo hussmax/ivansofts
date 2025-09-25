@@ -62,7 +62,7 @@ const ChatPage = () => {
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    await sendTypingStatus(false, selectedUserId);
+    await sendTypingStatus(false, selectedUserId); // Stop typing when message is sent
 
     if (selectedUserId) {
       const { error } = await supabase.from('private_messages').insert({
@@ -105,6 +105,7 @@ const ChatPage = () => {
 
     if (!user) return;
 
+    // Send typing status with the correct context
     sendTypingStatus(true, selectedUserId);
 
     if (typingTimeoutRef.current) {
@@ -112,7 +113,7 @@ const ChatPage = () => {
     }
 
     typingTimeoutRef.current = setTimeout(() => {
-      sendTypingStatus(false, selectedUserId);
+      sendTypingStatus(false, selectedUserId); // Stop typing after a delay
     }, 3000);
   };
 
@@ -155,10 +156,14 @@ const ChatPage = () => {
 
   const groupedMessages = groupMessagesByDate(messages);
 
+  // Filter typing users based on the current chat context
   const currentChatTypingUsers = typingUsers.filter(
     (typingUser) =>
-      typingUser.id !== user?.id &&
-      (selectedUserId === null || typingUser.id === selectedUserId)
+      typingUser.id !== user?.id && // Exclude current user
+      (
+        (selectedUserId === null && typingUser.typingToUserId === null) || // Global chat: show only global typers
+        (selectedUserId !== null && typingUser.typingToUserId === user?.id && typingUser.id === selectedUserId) // Private chat: show only the other user typing to current user
+      )
   );
 
   return (

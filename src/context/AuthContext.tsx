@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { showError, showSuccess } from '@/utils/toast';
@@ -19,6 +19,7 @@ interface OnlineUser {
 interface TypingUser {
   id: string;
   display_name: string;
+  typingToUserId: string | null; // Null for global chat, ID of receiver for private chat
 }
 
 interface AuthContextType {
@@ -30,12 +31,12 @@ interface AuthContextType {
   typingUsers: TypingUser[]; // New state for typing users
   updateUserDisplayName: (newDisplayName: string) => void;
   updateUserAvatar: (newAvatarUrl: string) => void; // New function for avatar
-  sendTypingStatus: (isTyping: boolean, receiverId?: string | null) => Promise<void>; // New function to send typing status
+  sendTypingStatus: (isTyping: boolean, typingToUserId?: string | null) => Promise<void>; // New function to send typing status
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { ReactNode }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,11 +130,12 @@ export const AuthProvider = ({ children }: { ReactNode }) => {
       const currentTypingUsers: TypingUser[] = [];
       for (const userId in state) {
         if (state[userId].length > 0) {
-          const userPresence = state[userId][0] as { user_id: string; display_name: string; is_typing: boolean };
+          const userPresence = state[userId][0] as { user_id: string; display_name: string; is_typing: boolean; typing_to_user_id: string | null };
           if (userPresence.is_typing && userPresence.user_id !== user.id) {
             currentTypingUsers.push({
               id: userPresence.user_id,
               display_name: userPresence.display_name,
+              typingToUserId: userPresence.typing_to_user_id,
             });
           }
         }
@@ -163,6 +165,7 @@ export const AuthProvider = ({ children }: { ReactNode }) => {
           display_name: user.display_name || user.phone || 'Anonymous',
           avatar_url: user.avatar_url || null,
           is_typing: false, // Initial typing status
+          typing_to_user_id: null, // Initial private typing status
         });
       }
     });
@@ -172,17 +175,16 @@ export const AuthProvider = ({ children }: { ReactNode }) => {
     };
   }, [user]);
 
-  const sendTypingStatus = useCallback(async (isTyping: boolean, receiverId?: string | null) => {
+  const sendTypingStatus = useCallback(async (isTyping: boolean, typingToUserId: string | null = null) => {
     if (!user) return;
 
-    // For simplicity, we'll use the global channel for typing status for now.
-    // In a more complex app, private chat typing would use a dedicated private channel.
     const channel = supabase.channel('global-presence-and-typing');
     await channel.track({
       user_id: user.id,
       display_name: user.display_name || user.phone || 'Anonymous',
       avatar_url: user.avatar_url || null,
       is_typing: isTyping,
+      typing_to_user_id: typingToUserId, // Send the receiver ID
     });
   }, [user]);
 
