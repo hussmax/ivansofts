@@ -7,6 +7,8 @@ import { MadeWithDyad } from '@/components/made-with-dyad';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
+import { Link } from 'react-router-dom'; // Import Link
+import { ArrowLeft } from 'lucide-react'; // Import ArrowLeft icon
 
 interface Message {
   id: string;
@@ -87,8 +89,20 @@ const ChatPage = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <Card className="w-full max-w-2xl h-[80vh] flex flex-col">
-        <CardHeader className="border-b">
-          <CardTitle className="text-2xl">Global Chat</CardTitle>
+        <CardHeader className="border-b p-4 flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" asChild>
+              <Link to="/dashboard">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            </Button>
+            <CardTitle className="text-2xl">Global Chat</CardTitle>
+          </div>
+          {user && (
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              Logged in as: {user.phone || 'Anonymous'}
+            </span>
+          )}
         </CardHeader>
         <CardContent className="flex-1 p-4 overflow-hidden flex flex-col">
           <ScrollArea ref={scrollAreaRef} className="flex-1 pr-4 mb-4">
