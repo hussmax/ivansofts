@@ -186,8 +186,6 @@ const ChatPage = () => {
     e.preventDefault();
     if (newMessage.trim() === '' || !user) return;
 
-    const senderName = user.display_name || user.phone || 'Anonymous';
-
     if (selectedUserId) {
       // Send private message
       const { error } = await supabase.from('private_messages').insert({
@@ -205,7 +203,6 @@ const ChatPage = () => {
       // Send global message
       const { error } = await supabase.from('messages').insert({
         user_id: user.id,
-        sender_name: senderName, // This column is in the 'messages' table
         content: newMessage.trim(),
       });
 
