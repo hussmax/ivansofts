@@ -22,6 +22,8 @@ const ChatLayout = ({ children, selectedUserId, selectedUserName, onSelectUser }
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const isMobile = useIsMobile();
 
+  const chatTitle = selectedUserName ? `Chat with ${selectedUserName}` : 'Global Chat';
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <div className="flex flex-col md:flex-row gap-4 w-full max-w-full md:max-w-6xl h-[calc(100vh-2rem)]">
@@ -42,7 +44,7 @@ const ChatLayout = ({ children, selectedUserId, selectedUserName, onSelectUser }
                 </Link>
               </Button>
               <CardTitle className="text-2xl">
-                {isMobile ? 'Chat' : (selectedUserName ? `Chat with ${selectedUserName}` : 'Global Chat')}
+                {chatTitle}
               </CardTitle>
             </div>
             <div className="flex items-center gap-2">
