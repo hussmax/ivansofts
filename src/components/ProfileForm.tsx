@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { showSuccess, showError } from '@/utils/toast';
 
 const ProfileForm = () => {
-  const { user, session } = useAuth();
+  const { user, updateUserDisplayName } = useAuth(); // Destructure updateUserDisplayName
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -47,8 +47,7 @@ const ProfileForm = () => {
       showError('Error updating profile: ' + error.message);
     } else {
       showSuccess('Profile updated successfully!');
-      // Manually update the user object in AuthContext if needed, or refetch session
-      // For now, a refresh will pick it up, or the AuthContext listener will
+      updateUserDisplayName(displayName); // Update the display name in AuthContext
     }
     setLoading(false);
   };

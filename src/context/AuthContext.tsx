@@ -19,7 +19,8 @@ interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
-  onlineUsers: OnlineUser[]; // Update onlineUsers to be an array of objects
+  onlineUsers: OnlineUser[];
+  updateUserDisplayName: (newDisplayName: string) => void; // New function
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,7 +29,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]); // New state for online users
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const navigate = useNavigate();
 
   const fetchUserProfile = async (userId: string) => {
@@ -145,8 +146,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(false);
   };
 
+  const updateUserDisplayName = (newDisplayName: string) => {
+    setUser((prevUser) => {
+      if (prevUser) {
+        return { ...prevUser, display_name: newDisplayName };
+      }
+      return prevUser;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user, loading, signOut, onlineUsers }}>
+    <AuthContext.Provider value={{ session, user, loading, signOut, onlineUsers, updateUserDisplayName }}>
       {children}
     </AuthContext.Provider>
   );
