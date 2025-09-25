@@ -4,9 +4,10 @@ import { supabase } from '@/lib/supabase';
 import { showError, showSuccess } from '@/utils/toast';
 import { useNavigate } from 'react-router-dom';
 
-// Extend the User type to include display_name
+// Extend the User type to include display_name and avatar_url
 interface CustomUser extends User {
   display_name?: string;
+  avatar_url?: string; // New field for avatar URL
 }
 
 interface OnlineUser {
@@ -20,12 +21,13 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   onlineUsers: OnlineUser[];
-  updateUserDisplayName: (newDisplayName: string) => void; // New function
+  updateUserDisplayName: (newDisplayName: string) => void;
+  updateUserAvatar: (newAvatarUrl: string) => void; // New function for avatar
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider = ({ children }: { ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,15 +37,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchUserProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('display_name')
+      .select('display_name, avatar_url') // Select avatar_url
       .eq('id', userId)
       .single();
 
     if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
       console.error('Error fetching user profile:', error.message);
-      return null;
+      return { display_name: null, avatar_url: null };
     }
-    return data?.display_name || null;
+    return { display_name: data?.display_name || null, avatar_url: data?.avatar_url || null };
   };
 
   useEffect(() => {
@@ -53,8 +55,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         showError(error.message);
       } else {
         if (session?.user) {
-          const displayName = await fetchUserProfile(session.user.id);
-          setUser({ ...session.user, display_name: displayName });
+          const { display_name, avatar_url } = await fetchUserProfile(session.user.id);
+          setUser({ ...session.user, display_name, avatar_url });
         } else {
           setUser(null);
         }
@@ -68,8 +70,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (session?.user) {
-          const displayName = await fetchUserProfile(session.user.id);
-          setUser({ ...session.user, display_name: displayName });
+          const { display_name, avatar_url } = await fetchUserProfile(session.user.id);
+          setUser({ ...session.user, display_name, avatar_url });
         } else {
           setUser(null);
         }
@@ -155,8 +157,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const updateUserAvatar = (newAvatarUrl: string) => {
+    setUser((prevUser) => {
+      if (prevUser) {
+        return { ...prevUser, avatar_url: newAvatarUrl };
+      }
+      return prevUser;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user, loading, signOut, onlineUsers, updateUserDisplayName }}>
+    <AuthContext.Provider value={{ session, user, loading, signOut, onlineUsers, updateUserDisplayName, updateUserAvatar }}>
       {children}
     </AuthContext.Provider>
   );
