@@ -209,7 +209,7 @@ const ChatPage = () => {
                         )}
                         <div className="flex flex-col">
                           <span className={`text-xs mb-1 ${isCurrentUser ? 'text-right' : 'text-left'} text-gray-500 dark:text-gray-400`}>
-                            {isCurrentUser ? `You (${msg.sender_name})` : msg.sender_name}
+                            {isCurrentUser ? 'You' : msg.sender_name}
                           </span>
                           <div
                             className={`max-w-[70%] p-3 rounded-lg relative group shadow-sm ${
