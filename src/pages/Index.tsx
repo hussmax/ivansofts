@@ -1,10 +1,10 @@
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext"; // Import useAuth
+import { Link, Navigate } from "react-router-dom"; // Import Navigate
+import { useAuth } from "@/context/AuthContext";
 
 const Index = () => {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -14,6 +14,11 @@ const Index = () => {
     );
   }
 
+  // If user is logged in, redirect to dashboard
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <div className="text-center mb-8">
@@ -21,20 +26,9 @@ const Index = () => {
         <p className="text-xl text-gray-600 dark:text-gray-400 mb-6">
           Start connecting with your friends and family!
         </p>
-        {user ? (
-          <div className="space-x-4">
-            <Button asChild>
-              <Link to="/profile">View Profile</Link>
-            </Button>
-            <Button onClick={signOut} variant="outline">
-              Logout
-            </Button>
-          </div>
-        ) : (
-          <Button asChild>
-            <Link to="/register">Get Started</Link>
-          </Button>
-        )}
+        <Button asChild>
+          <Link to="/register">Get Started</Link>
+        </Button>
       </div>
       <MadeWithDyad />
     </div>
