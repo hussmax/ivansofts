@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { cn } from '@/lib/utils'; // Import cn for conditional class names
+import { cn } from '@/lib/utils';
+import UserAvatar from './UserAvatar'; // Import UserAvatar
 
 interface UserProfile {
   id: string;
   display_name: string;
+  avatar_url?: string | null; // Add avatar_url to UserProfile
 }
 
 interface UserSidebarProps {
@@ -20,20 +22,19 @@ interface UserSidebarProps {
 const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const { onlineUsers, user: currentUser } = useAuth(); // Get current user to exclude from list
+  const { onlineUsers, user: currentUser } = useAuth();
 
   useEffect(() => {
     const fetchUsers = async () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, display_name')
+        .select('id, display_name, avatar_url') // Select avatar_url
         .order('display_name', { ascending: true });
 
       if (error) {
         showError('Error fetching users: ' + error.message);
       } else {
-        // Filter out the current logged-in user from the list
         setUsers(data?.filter(profile => profile.id !== currentUser?.id) || []);
       }
       setLoading(false);
@@ -55,7 +56,7 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser]); // Re-run effect if currentUser changes
+  }, [currentUser]);
 
   return (
     <Card className="w-full md:w-64 h-full flex flex-col">
@@ -76,6 +77,7 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
                 )}
                 onClick={() => onSelectUser(null, null)}
               >
+                <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <span className="font-medium">Global Chat</span>
               </div>
               {users.length === 0 ? (
@@ -94,7 +96,12 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
                       onClick={() => onSelectUser(userProfile.id, userProfile.display_name)}
                     >
                       <div className={`h-2 w-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
-                      <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                      <UserAvatar
+                        src={userProfile.avatar_url}
+                        alt={userProfile.display_name}
+                        fallback={userProfile.display_name}
+                        className="h-6 w-6"
+                      />
                       <span className="font-medium">{userProfile.display_name}</span>
                     </div>
                   );

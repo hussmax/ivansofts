@@ -12,7 +12,8 @@ import { ArrowLeft } from 'lucide-react';
 import UserSidebar from '@/components/UserSidebar';
 import MobileSidebar from '@/components/MobileSidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useChatMessages, Message } from '@/hooks/use-chat-messages'; // Import the new hook and Message interface
+import { useChatMessages, Message } from '@/hooks/use-chat-messages';
+import UserAvatar from '@/components/UserAvatar'; // Import UserAvatar
 
 const ChatPage = () => {
   const { user } = useAuth();
@@ -119,8 +120,16 @@ const ChatPage = () => {
                   messages.map((msg) => (
                     <div
                       key={msg.id}
-                      className={`flex ${msg.user_id === user?.id ? 'justify-end' : 'justify-start'}`}
+                      className={`flex items-start gap-2 ${msg.user_id === user?.id ? 'justify-end' : 'justify-start'}`}
                     >
+                      {msg.user_id !== user?.id && (
+                        <UserAvatar
+                          src={msg.sender_avatar_url}
+                          alt={msg.sender_name}
+                          fallback={msg.sender_name}
+                          className="h-8 w-8"
+                        />
+                      )}
                       <div
                         className={`max-w-[70%] p-3 rounded-lg ${
                           msg.user_id === user?.id
@@ -134,6 +143,14 @@ const ChatPage = () => {
                           {new Date(msg.created_at).toLocaleTimeString()}
                         </p>
                       </div>
+                      {msg.user_id === user?.id && (
+                        <UserAvatar
+                          src={msg.sender_avatar_url}
+                          alt={msg.sender_name}
+                          fallback={msg.sender_name}
+                          className="h-8 w-8"
+                        />
+                      )}
                     </div>
                   ))
                 )}

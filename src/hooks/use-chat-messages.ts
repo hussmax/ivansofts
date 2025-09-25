@@ -7,6 +7,7 @@ export interface Message {
   id: string;
   user_id: string; // The ID of the user who sent the message
   sender_name: string;
+  sender_avatar_url?: string | null; // New field for sender's avatar URL
   content: string;
   created_at: string;
   receiver_id?: string; // Only present for private messages
@@ -30,14 +31,14 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
       // Fetch private messages
       query = supabase
         .from('private_messages')
-        .select('id, sender_id, receiver_id, content, created_at, profiles(display_name)')
+        .select('id, sender_id, receiver_id, content, created_at, profiles(display_name, avatar_url)') // Select avatar_url
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id})`)
         .order('created_at', { ascending: true });
     } else {
       // Fetch global messages
       query = supabase
         .from('messages')
-        .select('id, user_id, content, created_at, profiles(display_name)')
+        .select('id, user_id, content, created_at, profiles(display_name, avatar_url)') // Select avatar_url
         .order('created_at', { ascending: true });
     }
 
@@ -52,6 +53,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
           id: msg.id,
           user_id: msg.sender_id,
           sender_name: msg.profiles?.display_name || 'Anonymous',
+          sender_avatar_url: msg.profiles?.avatar_url || null, // Assign avatar_url
           content: msg.content,
           created_at: msg.created_at,
           receiver_id: msg.receiver_id,
@@ -62,6 +64,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
           id: msg.id,
           user_id: msg.user_id,
           sender_name: msg.profiles?.display_name || 'Anonymous',
+          sender_avatar_url: msg.profiles?.avatar_url || null, // Assign avatar_url
           content: msg.content,
           created_at: msg.created_at,
         }));
@@ -85,7 +88,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
 
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('display_name')
+        .select('display_name, avatar_url') // Select avatar_url
         .eq('id', senderId)
         .single();
 
@@ -99,6 +102,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
           id: newMsg.id,
           user_id: senderId,
           sender_name: profile?.display_name || 'Anonymous',
+          sender_avatar_url: profile?.avatar_url || null, // Assign avatar_url
           content: newMsg.content,
           created_at: newMsg.created_at,
           receiver_id: newMsg.receiver_id,
