@@ -4,22 +4,35 @@ import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { MadeWithDyad } from '@/components/made-with-dyad';
-import { ThemeToggle } from '@/components/ThemeToggle'; // Import ThemeToggle
+import { ThemeToggle } from '@/components/ThemeToggle';
+import UserAvatar from '@/components/UserAvatar'; // Import UserAvatar
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
+  const displayName = user?.display_name || user?.phone || 'Anonymous';
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <Card className="w-full max-w-md text-center">
-        <CardHeader className="flex flex-row justify-between items-center w-full"> {/* Adjusted for ThemeToggle */}
-          <CardTitle className="text-3xl">Welcome to your Dashboard!</CardTitle>
-          <ThemeToggle /> {/* Add ThemeToggle here */}
+        <CardHeader className="flex flex-row justify-between items-center w-full pb-2">
+          <CardTitle className="text-3xl">Dashboard</CardTitle>
+          <ThemeToggle />
         </CardHeader>
-        <CardContent className="space-y-4">
-          <CardDescription>
-            Hello, {user?.display_name || user?.phone || user?.id}! This is your personalized space.
-          </CardDescription>
+        <CardContent className="space-y-4 pt-4">
+          <div className="flex flex-col items-center mb-4">
+            <UserAvatar
+              src={user?.avatar_url}
+              alt={displayName}
+              fallback={displayName}
+              className="h-24 w-24 mb-4"
+            />
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              Welcome, {displayName}!
+            </h2>
+            <CardDescription className="mt-2">
+              This is your personalized space.
+            </CardDescription>
+          </div>
           <p className="text-lg text-gray-700 dark:text-gray-300">
             You are successfully logged in.
           </p>
