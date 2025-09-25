@@ -82,7 +82,7 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
                 <p className="text-center text-gray-500 dark:text-gray-400">No other users found.</p>
               ) : (
                 users.map((userProfile) => {
-                  const isOnline = onlineUsers.includes(userProfile.id);
+                  const isOnline = onlineUsers.some(onlineUser => onlineUser.id === userProfile.id);
                   const isSelected = selectedUserId === userProfile.id;
                   return (
                     <div

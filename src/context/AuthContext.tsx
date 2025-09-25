@@ -9,12 +9,17 @@ interface CustomUser extends User {
   display_name?: string;
 }
 
+interface OnlineUser {
+  id: string;
+  display_name: string;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: CustomUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
-  onlineUsers: string[]; // Add onlineUsers to context
+  onlineUsers: OnlineUser[]; // Update onlineUsers to be an array of objects
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,7 +28,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]); // New state for online users
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]); // New state for online users
   const navigate = useNavigate();
 
   const fetchUserProfile = async (userId: string) => {
@@ -90,16 +95,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       channel.on('presence', { event: 'sync' }, () => {
         const newState = channel.presenceState();
-        const currentOnlineUsers = Object.keys(newState);
+        const currentOnlineUsers: OnlineUser[] = [];
+        for (const userId in newState) {
+          if (newState[userId].length > 0) {
+            const userPresence = newState[userId][0] as { user_id: string; display_name: string };
+            currentOnlineUsers.push({ id: userPresence.user_id, display_name: userPresence.display_name });
+          }
+        }
         setOnlineUsers(currentOnlineUsers);
       });
 
       channel.on('presence', { event: 'join' }, ({ newPresences }) => {
-        setOnlineUsers((prev) => [...prev, ...newPresences.map((p) => p.key)]);
+        setOnlineUsers((prev) => [
+          ...prev,
+          ...newPresences.map((p: any) => ({ id: p.key, display_name: p.display_name })),
+        ]);
       });
 
       channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        setOnlineUsers((prev) => prev.filter((id) => !leftPresences.some((p) => p.key === id)));
+        setOnlineUsers((prev) => prev.filter((onlineUser) => !leftPresences.some((p: any) => p.key === onlineUser.id)));
       });
 
       channel.subscribe(async (status) => {
