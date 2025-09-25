@@ -6,7 +6,8 @@ import { Link } from 'react-router-dom';
 import ProfileForm from '@/components/ProfileForm';
 import UserAvatar from '@/components/UserAvatar';
 import AvatarUpload from '@/components/AvatarUpload';
-import { ThemeToggle } from '@/components/ThemeToggle'; // Import ThemeToggle
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { ArrowLeft } from 'lucide-react'; // Import ArrowLeft
 
 const Profile = () => {
   const { user, loading, signOut } = useAuth();
@@ -42,9 +43,16 @@ const Profile = () => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="flex flex-row justify-between items-center w-full"> {/* Adjusted for ThemeToggle */}
-          <CardTitle className="text-2xl">User Profile</CardTitle>
-          <ThemeToggle /> {/* Add ThemeToggle here */}
+        <CardHeader className="flex flex-row justify-between items-center w-full">
+          <div className="flex items-center gap-2"> {/* Group back button and title */}
+            <Button variant="ghost" size="icon" asChild>
+              <Link to="/dashboard">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            </Button>
+            <CardTitle className="text-2xl">User Profile</CardTitle>
+          </div>
+          <ThemeToggle />
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col items-center text-center mb-4">
