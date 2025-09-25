@@ -5,7 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
-import { Trash2, Send, MessageCircle, Smile, Edit } from 'lucide-react'; // Import Edit icon
+import { Trash2, Send, MessageCircle, Smile, Edit } from 'lucide-react';
 import { useChatMessages, Message } from '@/hooks/use-chat-messages';
 import UserAvatar from '@/components/UserAvatar';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -29,7 +29,8 @@ import ChatLayout from '@/components/ChatLayout';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { Textarea } from '@/components/ui/textarea';
-import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton for loading indicator
+import { Skeleton } from '@/components/ui/skeleton';
+import MessageReactions from '@/components/MessageReactions'; // Import MessageReactions
 
 const ChatPage = () => {
   const { user, typingUsers, sendTypingStatus } = useAuth();
@@ -37,13 +38,13 @@ const ChatPage = () => {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserName, setSelectedUserName] = useState<string | null>(null);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null); // New state for editing
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialScrollDone = useRef(false); // To track initial scroll to bottom
+  const initialScrollDone = useRef(false);
 
-  const { messages, loadingMessages, setMessages, deleteMessage, editMessage, hasMore, loadMoreMessages } = useChatMessages({ selectedUserId });
+  const { messages, loadingMessages, setMessages, deleteMessage, editMessage, addReaction, removeReaction, hasMore, loadMoreMessages } = useChatMessages({ selectedUserId });
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (scrollAreaRef.current) {
@@ -54,19 +55,17 @@ const ChatPage = () => {
     }
   }, []);
 
-  // Scroll to bottom on initial load or when selected user changes
   useEffect(() => {
     if (!loadingMessages && !initialScrollDone.current) {
-      scrollToBottom('auto'); // Use 'auto' for initial scroll to prevent jarring animation
+      scrollToBottom('auto');
       initialScrollDone.current = true;
     }
   }, [loadingMessages, scrollToBottom]);
 
-  // Scroll to bottom when new messages arrive (if already at bottom)
   useEffect(() => {
     if (scrollAreaRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 20; // Threshold for "at bottom"
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 20;
 
       if (isAtBottom) {
         scrollToBottom();
@@ -74,7 +73,6 @@ const ChatPage = () => {
     }
   }, [messages, scrollToBottom]);
 
-  // Auto-focus the input when selected user changes or editing starts
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
@@ -86,19 +84,13 @@ const ChatPage = () => {
     if (scrollTop === 0 && hasMore && !loadingMessages) {
       const oldScrollHeight = event.currentTarget.scrollHeight;
       loadMoreMessages();
-      // After loading, adjust scroll position to maintain view
-      // This needs to be done after messages are updated, so it's handled in the next effect
     }
   }, [hasMore, loadingMessages, loadMoreMessages]);
 
-  // Effect to adjust scroll position after loading older messages
   useEffect(() => {
     if (scrollAreaRef.current && !loadingMessages && messages.length > 0) {
       const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
-      // Only adjust if we were at the top before loading more
       if (scrollTop === 0 && scrollHeight > clientHeight) {
-        // This is a bit tricky. We need to wait for the DOM to update with new messages
-        // and then set the scroll position. A small timeout can help.
         const prevScrollHeight = scrollAreaRef.current.dataset.prevScrollHeight ? parseInt(scrollAreaRef.current.dataset.prevScrollHeight) : 0;
         if (prevScrollHeight > 0 && scrollHeight > prevScrollHeight) {
           scrollAreaRef.current.scrollTop = scrollHeight - prevScrollHeight;
@@ -119,7 +111,6 @@ const ChatPage = () => {
     await sendTypingStatus(false, selectedUserId);
 
     if (editingMessageId) {
-      // If editing, call editMessage
       await editMessage(editingMessageId, newMessage.trim(), !!selectedUserId);
       setEditingMessageId(null);
     } else if (selectedUserId) {
@@ -146,7 +137,7 @@ const ChatPage = () => {
         setNewMessage('');
       }
     }
-    setNewMessage(''); // Clear input after sending or editing
+    setNewMessage('');
   };
 
   const handleDeleteMessage = async (messageId: string) => {
@@ -156,7 +147,7 @@ const ChatPage = () => {
   const handleEditClick = (message: Message) => {
     setEditingMessageId(message.id);
     setNewMessage(message.content);
-    setIsEmojiPickerOpen(false); // Close emoji picker when editing
+    setIsEmojiPickerOpen(false);
   };
 
   const handleCancelEdit = () => {
@@ -167,16 +158,16 @@ const ChatPage = () => {
   const handleSelectUser = (userId: string | null, userName: string | null) => {
     setSelectedUserId(userId);
     setSelectedUserName(userName);
-    setMessages([]); // Clear messages when switching users
-    initialScrollDone.current = false; // Reset for new chat
-    setEditingMessageId(null); // Clear editing state
-    setNewMessage(''); // Clear input
+    setMessages([]);
+    initialScrollDone.current = false;
+    setEditingMessageId(null);
+    setNewMessage('');
   };
 
   const handleNewMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewMessage(e.target.value);
 
-    if (!user || editingMessageId) return; // Don't send typing status if editing
+    if (!user || editingMessageId) return;
 
     sendTypingStatus(true, selectedUserId);
 
@@ -191,7 +182,7 @@ const ChatPage = () => {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault(); // Prevent new line in textarea
+      e.preventDefault();
       handleSendMessage(e);
     }
   };
@@ -366,6 +357,12 @@ const ChatPage = () => {
                                     </AlertDialog>
                                   </div>
                                 )}
+                                <MessageReactions
+                                  messageId={msg.id}
+                                  reactions={msg.reactions}
+                                  onAddReaction={addReaction}
+                                  onRemoveReaction={removeReaction}
+                                />
                               </div>
                             </div>
                             {isCurrentUser && (
