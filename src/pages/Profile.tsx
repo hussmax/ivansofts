@@ -43,6 +43,9 @@ const Profile = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-lg">
+            <strong>Display Name:</strong> {user.display_name || user.phone || 'Anonymous'}
+          </p>
+          <p className="text-lg">
             <strong>User ID:</strong> {user.id}
           </p>
           {user.phone && (
@@ -50,9 +53,6 @@ const Profile = () => {
               <strong>Phone Number:</strong> {user.phone}
             </p>
           )}
-          <p className="text-lg">
-            <strong>Created At:</strong> {new Date(user.created_at).toLocaleDateString()}
-          </p>
           <ProfileForm /> {/* Integrate the ProfileForm here */}
           <Button onClick={signOut} className="w-full" variant="destructive">
             Logout
