@@ -14,7 +14,7 @@ import MobileSidebar from '@/components/MobileSidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useChatMessages, Message } from '@/hooks/use-chat-messages';
 import UserAvatar from '@/components/UserAvatar';
-import TypingIndicator from '@/components/TypingIndicator'; // Import TypingIndicator
+import TypingIndicator from '@/components/TypingIndicator';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,9 +26,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { ThemeToggle } from '@/components/ThemeToggle'; // Import ThemeToggle
 
 const ChatPage = () => {
-  const { user, typingUsers, sendTypingStatus } = useAuth(); // Get typingUsers and sendTypingStatus from AuthContext
+  const { user, typingUsers, sendTypingStatus } = useAuth();
   const [newMessage, setNewMessage] = useState('');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -56,14 +57,12 @@ const ChatPage = () => {
     e.preventDefault();
     if (newMessage.trim() === '' || !user) return;
 
-    // Clear typing status after sending message
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     await sendTypingStatus(false, selectedUserId);
 
     if (selectedUserId) {
-      // Send private message
       const { error } = await supabase.from('private_messages').insert({
         sender_id: user.id,
         receiver_id: selectedUserId,
@@ -76,7 +75,6 @@ const ChatPage = () => {
         setNewMessage('');
       }
     } else {
-      // Send global message
       const { error } = await supabase.from('messages').insert({
         user_id: user.id,
         content: newMessage.trim(),
@@ -97,8 +95,8 @@ const ChatPage = () => {
   const handleSelectUser = (userId: string | null, userName: string | null) => {
     setSelectedUserId(userId);
     setSelectedUserName(userName);
-    setIsMobileSidebarOpen(false); // Close mobile sidebar after selection
-    setMessages([]); // Clear messages when switching chat
+    setIsMobileSidebarOpen(false);
+    setMessages([]);
   };
 
   const handleNewMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,25 +104,21 @@ const ChatPage = () => {
 
     if (!user) return;
 
-    // Send typing status
     sendTypingStatus(true, selectedUserId);
 
-    // Clear previous timeout if exists
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set a new timeout to send 'not typing' after a delay
     typingTimeoutRef.current = setTimeout(() => {
       sendTypingStatus(false, selectedUserId);
-    }, 3000); // 3 seconds delay
+    }, 3000);
   };
 
-  // Filter typing users for the current chat context
   const currentChatTypingUsers = typingUsers.filter(
     (typingUser) =>
-      typingUser.id !== user?.id && // Exclude current user
-      (selectedUserId === null || typingUser.id === selectedUserId) // Only show for selected user in private chat, or all in global
+      typingUser.id !== user?.id &&
+      (selectedUserId === null || typingUser.id === selectedUserId)
   );
 
   return (
@@ -150,11 +144,14 @@ const ChatPage = () => {
                 {selectedUserName ? `Chat with ${selectedUserName}` : 'Global Chat'}
               </CardTitle>
             </div>
-            {user && (
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                Logged in as: {user.display_name || user.phone || 'Anonymous'}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {user && (
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  Logged in as: {user.display_name || user.phone || 'Anonymous'}
+                </span>
+              )}
+              <ThemeToggle /> {/* Add ThemeToggle here */}
+            </div>
           </CardHeader>
           <CardContent className="flex-1 p-4 overflow-hidden flex flex-col">
             <ScrollArea ref={scrollAreaRef} className="flex-1 pr-4 mb-4">
@@ -252,7 +249,7 @@ const ChatPage = () => {
                 type="text"
                 placeholder={selectedUserName ? `Message ${selectedUserName}...` : "Type your message..."}
                 value={newMessage}
-                onChange={handleNewMessageChange} // Use the new handler
+                onChange={handleNewMessageChange}
                 className="flex-1"
                 disabled={!user}
               />
