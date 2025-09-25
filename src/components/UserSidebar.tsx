@@ -106,12 +106,14 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
               {/* Option to go back to Global Chat */}
               <div
                 className={cn(
-                  "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700",
-                  !selectedUserId && "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                  "flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors duration-200",
+                  !selectedUserId
+                    ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800"
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700"
                 )}
                 onClick={() => onSelectUser(null, null)}
               >
-                <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                <User className="h-4 w-4" />
                 <span className="font-medium">Global Chat</span>
               </div>
 
@@ -124,8 +126,10 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
                       <div
                         key={userProfile.id}
                         className={cn(
-                          "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700",
-                          isSelected && "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                          "flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors duration-200",
+                          isSelected
+                            ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800"
+                            : "hover:bg-gray-100 dark:hover:bg-gray-700"
                         )}
                         onClick={() => onSelectUser(userProfile.id, userProfile.display_name)}
                       >
@@ -152,8 +156,10 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
                       <div
                         key={userProfile.id}
                         className={cn(
-                          "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700",
-                          isSelected && "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
+                          "flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors duration-200",
+                          isSelected
+                            ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800"
+                            : "hover:bg-gray-100 dark:hover:bg-gray-700"
                         )}
                         onClick={() => onSelectUser(userProfile.id, userProfile.display_name)}
                       >
