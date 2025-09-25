@@ -7,13 +7,13 @@ import { MadeWithDyad } from '@/components/made-with-dyad';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
-import { Link } from 'react-router-dom'; // Import Link
-import { ArrowLeft } from 'lucide-react'; // Import ArrowLeft icon
+import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 
 interface Message {
   id: string;
   user_id: string;
-  sender_phone: string;
+  sender_name: string; // Changed from sender_phone
   content: string;
   created_at: string;
 }
@@ -75,7 +75,7 @@ const ChatPage = () => {
 
     const { error } = await supabase.from('messages').insert({
       user_id: user.id,
-      sender_phone: user.phone || 'Anonymous',
+      sender_name: user.display_name || user.phone || 'Anonymous', // Use display_name
       content: newMessage.trim(),
     });
 
@@ -100,7 +100,7 @@ const ChatPage = () => {
           </div>
           {user && (
             <span className="text-sm text-gray-600 dark:text-gray-400">
-              Logged in as: {user.phone || 'Anonymous'}
+              Logged in as: {user.display_name || user.phone || 'Anonymous'}
             </span>
           )}
         </CardHeader>
@@ -122,7 +122,7 @@ const ChatPage = () => {
                           : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                       }`}
                     >
-                      <p className="text-sm font-semibold">{msg.sender_phone}</p>
+                      <p className="text-sm font-semibold">{msg.sender_name}</p>
                       <p className="text-base">{msg.content}</p>
                       <p className="text-xs text-right opacity-75 mt-1">
                         {new Date(msg.created_at).toLocaleTimeString()}

@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
+import ProfileForm from '@/components/ProfileForm'; // Import the new ProfileForm
 
 const Profile = () => {
   const { user, loading, signOut } = useAuth();
@@ -52,6 +53,7 @@ const Profile = () => {
           <p className="text-lg">
             <strong>Created At:</strong> {new Date(user.created_at).toLocaleDateString()}
           </p>
+          <ProfileForm /> {/* Integrate the ProfileForm here */}
           <Button onClick={signOut} className="w-full" variant="destructive">
             Logout
           </Button>
