@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
-import { Trash2, Send } from 'lucide-react'; // Import Send icon
+import { Trash2, Send, MessageCircle } from 'lucide-react'; // Import MessageCircle
 import { useChatMessages, Message } from '@/hooks/use-chat-messages';
 import UserAvatar from '@/components/UserAvatar';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -165,9 +165,12 @@ const ChatPage = () => {
             {loadingMessages ? (
               <p className="text-center text-gray-500 dark:text-gray-400">Loading messages...</p>
             ) : messages.length === 0 ? (
-              <p className="text-center text-gray-500 dark:text-gray-400">
-                {selectedUserName ? `Start your private chat with ${selectedUserName}!` : 'No messages yet. Start chatting!'}
-              </p>
+              <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 py-10">
+                <MessageCircle className="h-12 w-12 mb-4" />
+                <p className="text-lg font-medium">
+                  {selectedUserName ? `Start your private chat with ${selectedUserName}!` : 'No messages yet. Start chatting!'}
+                </p>
+              </div>
             ) : (
               groupedMessages.map((group, groupIndex) => (
                 <React.Fragment key={group.date}>
@@ -201,9 +204,9 @@ const ChatPage = () => {
                             {isCurrentUser ? `You (${msg.sender_name})` : msg.sender_name}
                           </span>
                           <div
-                            className={`max-w-[70%] p-3 rounded-lg relative group ${
+                            className={`max-w-[70%] p-3 rounded-lg relative group shadow-sm ${ // Added shadow-sm
                               isCurrentUser
-                                ? 'bg-blue-500 text-white'
+                                ? 'bg-blue-600 text-white' // Slightly darker blue
                                 : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                             }`}
                           >
@@ -273,9 +276,9 @@ const ChatPage = () => {
             className="flex-1"
             disabled={!user}
           />
-          <Button type="submit" disabled={!user} size="icon"> {/* Added size="icon" */}
+          <Button type="submit" disabled={!user} size="icon">
             <Send className="h-4 w-4" />
-            <span className="sr-only">Send message</span> {/* Added for accessibility */}
+            <span className="sr-only">Send message</span>
           </Button>
         </form>
       </CardContent>
