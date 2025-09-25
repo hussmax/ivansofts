@@ -8,12 +8,23 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
 import { Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react'; // Import Trash2 icon
 import UserSidebar from '@/components/UserSidebar';
 import MobileSidebar from '@/components/MobileSidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useChatMessages, Message } from '@/hooks/use-chat-messages';
-import UserAvatar from '@/components/UserAvatar'; // Import UserAvatar
+import UserAvatar from '@/components/UserAvatar';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"; // Import AlertDialog components
 
 const ChatPage = () => {
   const { user } = useAuth();
@@ -24,7 +35,7 @@ const ChatPage = () => {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
-  const { messages, loadingMessages, setMessages } = useChatMessages({ selectedUserId });
+  const { messages, loadingMessages, setMessages, deleteMessage } = useChatMessages({ selectedUserId });
 
   const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
@@ -69,6 +80,10 @@ const ChatPage = () => {
         setNewMessage('');
       }
     }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    await deleteMessage(messageId, !!selectedUserId);
   };
 
   const handleSelectUser = (userId: string | null, userName: string | null) => {
@@ -131,7 +146,7 @@ const ChatPage = () => {
                         />
                       )}
                       <div
-                        className={`max-w-[70%] p-3 rounded-lg ${
+                        className={`max-w-[70%] p-3 rounded-lg relative group ${
                           msg.user_id === user?.id
                             ? 'bg-blue-500 text-white'
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
@@ -142,6 +157,34 @@ const ChatPage = () => {
                         <p className="text-xs text-right opacity-75 mt-1">
                           {new Date(msg.created_at).toLocaleTimeString()}
                         </p>
+                        {msg.user_id === user?.id && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                aria-label="Delete message"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently delete your message.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteMessage(msg.id)}>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                       {msg.user_id === user?.id && (
                         <UserAvatar

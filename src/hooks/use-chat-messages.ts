@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { showError } from '@/utils/toast';
+import { showError, showSuccess } from '@/utils/toast';
 import { useAuth } from '@/context/AuthContext';
 
 export interface Message {
@@ -74,6 +74,37 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     setLoadingMessages(false);
   }, [selectedUserId, user]);
 
+  const deleteMessage = useCallback(async (messageId: string, isPrivate: boolean) => {
+    if (!user) {
+      showError('You must be logged in to delete messages.');
+      return;
+    }
+
+    let error;
+    if (isPrivate) {
+      const { error: privateError } = await supabase
+        .from('private_messages')
+        .delete()
+        .eq('id', messageId)
+        .eq('sender_id', user.id); // Ensure only sender can delete
+      error = privateError;
+    } else {
+      const { error: globalError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId)
+        .eq('user_id', user.id); // Ensure only sender can delete
+      error = globalError;
+    }
+
+    if (error) {
+      showError('Error deleting message: ' + error.message);
+    } else {
+      setMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== messageId));
+      showSuccess('Message deleted successfully!');
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
@@ -110,6 +141,11 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
       ]);
     };
 
+    const handleDeleteMessage = (payload: any) => {
+      const deletedMsgId = payload.old.id;
+      setMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== deletedMsgId));
+    };
+
     if (selectedUserId) {
       const chatIdentifier = [user.id, selectedUserId].sort().join('_');
       channel = supabase.channel(`private-chat-${chatIdentifier}`);
@@ -122,6 +158,15 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
           filter: `or(and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id}))`,
         },
         handleNewMessage
+      ).on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'private_messages',
+          filter: `or(and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id}))`,
+        },
+        handleDeleteMessage
       ).subscribe();
     } else {
       channel = supabase.channel('global-chat-room');
@@ -129,6 +174,10 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
         handleNewMessage
+      ).on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'messages' },
+        handleDeleteMessage
       ).subscribe();
     }
 
@@ -139,5 +188,5 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     };
   }, [selectedUserId, user]);
 
-  return { messages, loadingMessages, setMessages };
+  return { messages, loadingMessages, setMessages, deleteMessage };
 };
