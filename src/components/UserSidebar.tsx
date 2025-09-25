@@ -3,15 +3,16 @@ import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { User } from 'lucide-react';
+import { User, Search } from 'lucide-react'; // Import Search icon
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
-import UserAvatar from './UserAvatar'; // Import UserAvatar
+import UserAvatar from './UserAvatar';
+import { Input } from '@/components/ui/input'; // Import Input component
 
 interface UserProfile {
   id: string;
   display_name: string;
-  avatar_url?: string | null; // Add avatar_url to UserProfile
+  avatar_url?: string | null;
 }
 
 interface UserSidebarProps {
@@ -20,8 +21,10 @@ interface UserSidebarProps {
 }
 
 const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]); // Store all fetched users
+  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]); // Store filtered users
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState(''); // State for search input
   const { onlineUsers, user: currentUser } = useAuth();
 
   useEffect(() => {
@@ -29,13 +32,15 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
       setLoading(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, display_name, avatar_url') // Select avatar_url
+        .select('id, display_name, avatar_url')
         .order('display_name', { ascending: true });
 
       if (error) {
         showError('Error fetching users: ' + error.message);
       } else {
-        setUsers(data?.filter(profile => profile.id !== currentUser?.id) || []);
+        const usersWithoutCurrentUser = data?.filter(profile => profile.id !== currentUser?.id) || [];
+        setAllUsers(usersWithoutCurrentUser);
+        setFilteredUsers(usersWithoutCurrentUser); // Initialize filtered users with all users
       }
       setLoading(false);
     };
@@ -48,7 +53,7 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'profiles' },
         (payload) => {
-          fetchUsers(); 
+          fetchUsers();
         }
       )
       .subscribe();
@@ -58,12 +63,35 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
     };
   }, [currentUser]);
 
+  // Effect to filter users based on search term
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredUsers(allUsers);
+    } else {
+      setFilteredUsers(
+        allUsers.filter((userProfile) =>
+          userProfile.display_name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      );
+    }
+  }, [searchTerm, allUsers]);
+
   return (
     <Card className="w-full md:w-64 h-full flex flex-col">
       <CardHeader className="border-b p-4">
-        <CardTitle className="text-xl">Users</CardTitle>
+        <CardTitle className="text-xl mb-2">Users</CardTitle>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400" />
+          <Input
+            type="text"
+            placeholder="Search users..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8 w-full"
+          />
+        </div>
       </CardHeader>
-      <CardContent className="flex-1 p-4 overflow-hidden">
+      <CardContent className="flex-1 p-4 overflow-hidden flex flex-col">
         {loading ? (
           <p className="text-center text-gray-500 dark:text-gray-400">Loading users...</p>
         ) : (
@@ -80,10 +108,10 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
                 <User className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                 <span className="font-medium">Global Chat</span>
               </div>
-              {users.length === 0 ? (
+              {filteredUsers.length === 0 ? (
                 <p className="text-center text-gray-500 dark:text-gray-400">No other users found.</p>
               ) : (
-                users.map((userProfile) => {
+                filteredUsers.map((userProfile) => {
                   const isOnline = onlineUsers.some(onlineUser => onlineUser.id === userProfile.id);
                   const isSelected = selectedUserId === userProfile.id;
                   return (
