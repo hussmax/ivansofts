@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
-import { Trash2, Send, MessageCircle } from 'lucide-react';
+import { Trash2, Send, MessageCircle, Smile } from 'lucide-react'; // Import Smile icon
 import { useChatMessages, Message } from '@/hooks/use-chat-messages';
 import UserAvatar from '@/components/UserAvatar';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -21,14 +21,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"; // Import Popover components
 import ChatLayout from '@/components/ChatLayout';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react'; // Import EmojiPicker
 
 const ChatPage = () => {
   const { user, typingUsers, sendTypingStatus } = useAuth();
   const [newMessage, setNewMessage] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserName, setSelectedUserName] = useState<string | null>(null);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false); // State for emoji picker visibility
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null); // Ref for the input field
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -115,6 +122,12 @@ const ChatPage = () => {
     typingTimeoutRef.current = setTimeout(() => {
       sendTypingStatus(false, selectedUserId); // Stop typing after a delay
     }, 3000);
+  };
+
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    setNewMessage((prevMsg) => prevMsg + emojiData.emoji);
+    setIsEmojiPickerOpen(false); // Close picker after selection
+    inputRef.current?.focus(); // Re-focus input
   };
 
   const formatMessageTimestamp = (timestamp: string) => {
@@ -281,8 +294,25 @@ const ChatPage = () => {
           </div>
         )}
         <form onSubmit={handleSendMessage} className="flex gap-2">
+          <Popover open={isEmojiPickerOpen} onOpenChange={setIsEmojiPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                type="button" // Important to prevent form submission
+                onClick={() => setIsEmojiPickerOpen((prev) => !prev)}
+                disabled={!user}
+              >
+                <Smile className="h-4 w-4" />
+                <span className="sr-only">Open emoji picker</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <EmojiPicker onEmojiClick={onEmojiClick} theme="auto" />
+            </PopoverContent>
+          </Popover>
           <Input
-            ref={inputRef} {/* Attach the ref here */}
+            ref={inputRef}
             type="text"
             placeholder={selectedUserName ? `Message ${selectedUserName}...` : "Type your message..."}
             value={newMessage}
@@ -290,7 +320,7 @@ const ChatPage = () => {
             className="flex-1"
             disabled={!user}
           />
-          <Button type="submit" disabled={!user} size="icon">
+          <Button type="submit" disabled={!user || newMessage.trim() === ''} size="icon">
             <Send className="h-4 w-4" />
             <span className="sr-only">Send message</span>
           </Button>
