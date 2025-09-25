@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,10 +15,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Message {
   id: string;
-  user_id: string;
+  user_id: string; // The ID of the user who sent the message
   sender_name: string;
   content: string;
   created_at: string;
+  receiver_id?: string; // Only present for private messages
 }
 
 const ChatPage = () => {
@@ -26,70 +27,193 @@ const ChatPage = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null); // New state for selected user ID
-  const [selectedUserName, setSelectedUserName] = useState<string | null>(null); // New state for selected user name
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserName, setSelectedUserName] = useState<string | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTo({
         top: scrollAreaRef.current.scrollHeight,
         behavior: 'smooth',
       });
     }
-  };
+  }, []);
 
+  // Effect to fetch messages based on selected user
   useEffect(() => {
+    if (!user) return;
+
     const fetchMessages = async () => {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .order('created_at', { ascending: true });
+      let query;
+      if (selectedUserId) {
+        // Fetch private messages
+        query = supabase
+          .from('private_messages')
+          .select('id, sender_id, receiver_id, content, created_at, profiles(display_name)')
+          .or(`and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id})`)
+          .order('created_at', { ascending: true });
+      } else {
+        // Fetch global messages
+        query = supabase
+          .from('messages')
+          .select('id, user_id, content, created_at, profiles(display_name)')
+          .order('created_at', { ascending: true });
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         showError('Error fetching messages: ' + error.message);
       } else {
-        setMessages(data || []);
+        if (selectedUserId) {
+          // Map private messages to the common Message interface
+          const privateMsgs: Message[] = data.map((msg: any) => ({
+            id: msg.id,
+            user_id: msg.sender_id,
+            sender_name: msg.profiles?.display_name || 'Anonymous',
+            content: msg.content,
+            created_at: msg.created_at,
+            receiver_id: msg.receiver_id,
+          }));
+          setMessages(privateMsgs);
+        } else {
+          // Map global messages to the common Message interface
+          const globalMsgs: Message[] = data.map((msg: any) => ({
+            id: msg.id,
+            user_id: msg.user_id,
+            sender_name: msg.profiles?.display_name || 'Anonymous',
+            content: msg.content,
+            created_at: msg.created_at,
+          }));
+          setMessages(globalMsgs);
+        }
       }
     };
 
     fetchMessages();
+  }, [selectedUserId, user]); // Re-fetch when selectedUserId or user changes
 
-    const channel = supabase
-      .channel('global-chat-room')
-      .on(
+  // Effect for real-time subscriptions
+  useEffect(() => {
+    if (!user) return;
+
+    let channel;
+    if (selectedUserId) {
+      // Private chat channel
+      const chatIdentifier = [user.id, selectedUserId].sort().join('_');
+      channel = supabase.channel(`private-chat-${chatIdentifier}`);
+      channel.on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'private_messages',
+          filter: `or(and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id}))`,
+        },
+        async (payload) => {
+          const newMsg = payload.new as any;
+          // Fetch sender's display name
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', newMsg.sender_id)
+            .single();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error fetching sender profile for private message:', error.message);
+          }
+
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              id: newMsg.id,
+              user_id: newMsg.sender_id,
+              sender_name: profile?.display_name || 'Anonymous',
+              content: newMsg.content,
+              created_at: newMsg.created_at,
+              receiver_id: newMsg.receiver_id,
+            },
+          ]);
+        }
+      ).subscribe();
+    } else {
+      // Global chat channel
+      channel = supabase.channel('global-chat-room');
+      channel.on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        (payload) => {
-          setMessages((prevMessages) => [...prevMessages, payload.new as Message]);
+        async (payload) => {
+          const newMsg = payload.new as any;
+          // Fetch sender's display name
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', newMsg.user_id)
+            .single();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error fetching sender profile for global message:', error.message);
+          }
+
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              id: newMsg.id,
+              user_id: newMsg.user_id,
+              sender_name: profile?.display_name || 'Anonymous',
+              content: newMsg.content,
+              created_at: newMsg.created_at,
+            },
+          ]);
         }
-      )
-      .subscribe();
+      ).subscribe();
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
-  }, []);
+  }, [selectedUserId, user]); // Re-subscribe when selectedUserId or user changes
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim() === '' || !user) return;
 
-    const { error } = await supabase.from('messages').insert({
-      user_id: user.id,
-      sender_name: user.display_name || user.phone || 'Anonymous',
-      content: newMessage.trim(),
-    });
+    const senderName = user.display_name || user.phone || 'Anonymous';
 
-    if (error) {
-      showError('Error sending message: ' + error.message);
+    if (selectedUserId) {
+      // Send private message
+      const { error } = await supabase.from('private_messages').insert({
+        sender_id: user.id,
+        receiver_id: selectedUserId,
+        content: newMessage.trim(),
+      });
+
+      if (error) {
+        showError('Error sending private message: ' + error.message);
+      } else {
+        setNewMessage('');
+      }
     } else {
-      setNewMessage('');
+      // Send global message
+      const { error } = await supabase.from('messages').insert({
+        user_id: user.id,
+        sender_name: senderName, // This column is in the 'messages' table
+        content: newMessage.trim(),
+      });
+
+      if (error) {
+        showError('Error sending global message: ' + error.message);
+      } else {
+        setNewMessage('');
+      }
     }
   };
 
@@ -97,7 +221,7 @@ const ChatPage = () => {
     setSelectedUserId(userId);
     setSelectedUserName(userName);
     setIsMobileSidebarOpen(false); // Close mobile sidebar after selection
-    // In a later step, we will adjust message fetching/sending based on selectedUserId
+    setMessages([]); // Clear messages when switching chat
   };
 
   return (
@@ -110,8 +234,8 @@ const ChatPage = () => {
                 <MobileSidebar
                   isOpen={isMobileSidebarOpen}
                   onOpenChange={setIsMobileSidebarOpen}
-                  onSelectUser={handleSelectUser} // Pass handler to MobileSidebar
-                  selectedUserId={selectedUserId} // Pass selected user to MobileSidebar
+                  onSelectUser={handleSelectUser}
+                  selectedUserId={selectedUserId}
                 />
               )}
               <Button variant="ghost" size="icon" asChild>
@@ -133,7 +257,9 @@ const ChatPage = () => {
             <ScrollArea ref={scrollAreaRef} className="flex-1 pr-4 mb-4">
               <div className="space-y-4">
                 {messages.length === 0 ? (
-                  <p className="text-center text-gray-500 dark:text-gray-400">No messages yet. Start chatting!</p>
+                  <p className="text-center text-gray-500 dark:text-gray-400">
+                    {selectedUserName ? `Start your private chat with ${selectedUserName}!` : 'No messages yet. Start chatting!'}
+                  </p>
                 ) : (
                   messages.map((msg) => (
                     <div
