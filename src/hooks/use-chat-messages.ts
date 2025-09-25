@@ -17,15 +17,22 @@ interface UseChatMessagesProps {
   selectedUserId: string | null;
 }
 
+const PAGE_SIZE = 20; // Number of messages to load per page
+
 export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
+  const [page, setPage] = useState(0); // Current page for pagination
+  const [hasMore, setHasMore] = useState(true); // Whether there are more messages to load
 
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (currentPage: number, append: boolean = false) => {
     if (!user) return;
 
     setLoadingMessages(true);
+    const from = currentPage * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
     let query;
     if (selectedUserId) {
       // Fetch private messages
@@ -33,13 +40,15 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
         .from('private_messages')
         .select('id, sender_id, receiver_id, content, created_at, profiles(display_name, avatar_url)') // Select avatar_url
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id})`)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false }) // Fetch in reverse order to get latest first
+        .range(from, to);
     } else {
       // Fetch global messages
       query = supabase
         .from('messages')
         .select('id, user_id, content, created_at, profiles(display_name, avatar_url)') // Select avatar_url
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false }) // Fetch in reverse order to get latest first
+        .range(from, to);
     }
 
     const { data, error } = await query;
@@ -47,32 +56,47 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     if (error) {
       showError('Error fetching messages: ' + error.message);
       setMessages([]);
+      setHasMore(false);
     } else {
-      if (selectedUserId) {
-        const privateMsgs: Message[] = data.map((msg: any) => ({
-          id: msg.id,
-          user_id: msg.sender_id,
-          sender_name: msg.profiles?.display_name || 'Anonymous',
-          sender_avatar_url: msg.profiles?.avatar_url || null, // Assign avatar_url
-          content: msg.content,
-          created_at: msg.created_at,
-          receiver_id: msg.receiver_id,
-        }));
-        setMessages(privateMsgs);
+      const fetchedMsgs: Message[] = data.map((msg: any) => ({
+        id: msg.id,
+        user_id: selectedUserId ? msg.sender_id : msg.user_id,
+        sender_name: msg.profiles?.display_name || 'Anonymous',
+        sender_avatar_url: msg.profiles?.avatar_url || null,
+        content: msg.content,
+        created_at: msg.created_at,
+        receiver_id: selectedUserId ? msg.receiver_id : undefined,
+      })).reverse(); // Reverse back to chronological order
+
+      if (append) {
+        setMessages((prevMessages) => [...fetchedMsgs, ...prevMessages]);
       } else {
-        const globalMsgs: Message[] = data.map((msg: any) => ({
-          id: msg.id,
-          user_id: msg.user_id,
-          sender_name: msg.profiles?.display_name || 'Anonymous',
-          sender_avatar_url: msg.profiles?.avatar_url || null, // Assign avatar_url
-          content: msg.content,
-          created_at: msg.created_at,
-        }));
-        setMessages(globalMsgs);
+        setMessages(fetchedMsgs);
       }
+      setHasMore(fetchedMsgs.length === PAGE_SIZE);
     }
     setLoadingMessages(false);
   }, [selectedUserId, user]);
+
+  const loadMoreMessages = useCallback(() => {
+    if (hasMore && !loadingMessages) {
+      setPage((prevPage) => prevPage + 1);
+    }
+  }, [hasMore, loadingMessages]);
+
+  useEffect(() => {
+    // When selectedUserId changes, reset page and fetch initial messages
+    setPage(0);
+    setHasMore(true);
+    fetchMessages(0);
+  }, [selectedUserId, user, fetchMessages]); // Added user to dependencies
+
+  useEffect(() => {
+    // Fetch messages when page changes (for infinite scrolling)
+    if (page > 0) {
+      fetchMessages(page, true); // Append older messages
+    }
+  }, [page, fetchMessages]);
 
   const deleteMessage = useCallback(async (messageId: string, isPrivate: boolean) => {
     if (!user) {
@@ -104,10 +128,6 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
       showSuccess('Message deleted successfully!');
     }
   }, [user]);
-
-  useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
 
   useEffect(() => {
     if (!user) return;
@@ -188,5 +208,5 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     };
   }, [selectedUserId, user]);
 
-  return { messages, loadingMessages, setMessages, deleteMessage };
+  return { messages, loadingMessages, setMessages, deleteMessage, hasMore, loadMoreMessages };
 };
