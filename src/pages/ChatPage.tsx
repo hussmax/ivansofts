@@ -5,7 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
-import { Trash2, Send, MessageCircle, Smile } from 'lucide-react';
+import { Trash2, Send, MessageCircle, Smile, Edit } from 'lucide-react'; // Import Edit icon
 import { useChatMessages, Message } from '@/hooks/use-chat-messages';
 import UserAvatar from '@/components/UserAvatar';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -37,12 +37,13 @@ const ChatPage = () => {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserName, setSelectedUserName] = useState<string | null>(null);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null); // New state for editing
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialScrollDone = useRef(false); // To track initial scroll to bottom
 
-  const { messages, loadingMessages, setMessages, deleteMessage, hasMore, loadMoreMessages } = useChatMessages({ selectedUserId });
+  const { messages, loadingMessages, setMessages, deleteMessage, editMessage, hasMore, loadMoreMessages } = useChatMessages({ selectedUserId });
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (scrollAreaRef.current) {
@@ -73,12 +74,12 @@ const ChatPage = () => {
     }
   }, [messages, scrollToBottom]);
 
-  // Auto-focus the input when selected user changes
+  // Auto-focus the input when selected user changes or editing starts
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
-  }, [selectedUserId, selectedUserName]);
+  }, [selectedUserId, selectedUserName, editingMessageId]);
 
   const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop } = event.currentTarget;
@@ -117,7 +118,11 @@ const ChatPage = () => {
     }
     await sendTypingStatus(false, selectedUserId);
 
-    if (selectedUserId) {
+    if (editingMessageId) {
+      // If editing, call editMessage
+      await editMessage(editingMessageId, newMessage.trim(), !!selectedUserId);
+      setEditingMessageId(null);
+    } else if (selectedUserId) {
       const { error } = await supabase.from('private_messages').insert({
         sender_id: user.id,
         receiver_id: selectedUserId,
@@ -141,10 +146,22 @@ const ChatPage = () => {
         setNewMessage('');
       }
     }
+    setNewMessage(''); // Clear input after sending or editing
   };
 
   const handleDeleteMessage = async (messageId: string) => {
     await deleteMessage(messageId, !!selectedUserId);
+  };
+
+  const handleEditClick = (message: Message) => {
+    setEditingMessageId(message.id);
+    setNewMessage(message.content);
+    setIsEmojiPickerOpen(false); // Close emoji picker when editing
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setNewMessage('');
   };
 
   const handleSelectUser = (userId: string | null, userName: string | null) => {
@@ -152,12 +169,14 @@ const ChatPage = () => {
     setSelectedUserName(userName);
     setMessages([]); // Clear messages when switching users
     initialScrollDone.current = false; // Reset for new chat
+    setEditingMessageId(null); // Clear editing state
+    setNewMessage(''); // Clear input
   };
 
   const handleNewMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewMessage(e.target.value);
 
-    if (!user) return;
+    if (!user || editingMessageId) return; // Don't send typing status if editing
 
     sendTypingStatus(true, selectedUserId);
 
@@ -172,6 +191,7 @@ const ChatPage = () => {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); // Prevent new line in textarea
       handleSendMessage(e);
     }
   };
@@ -182,15 +202,23 @@ const ChatPage = () => {
     inputRef.current?.focus();
   };
 
-  const formatMessageTimestamp = (timestamp: string) => {
+  const formatMessageTimestamp = (timestamp: string, isEdited: boolean, editedAt: string | null) => {
     const date = new Date(timestamp);
+    let formattedTime;
     if (isToday(date)) {
-      return format(date, 'HH:mm');
+      formattedTime = format(date, 'HH:mm');
     } else if (isYesterday(date)) {
-      return format(date, 'Yesterday HH:mm');
+      formattedTime = format(date, 'Yesterday HH:mm');
     } else {
-      return format(date, 'dd/MM/yyyy HH:mm');
+      formattedTime = format(date, 'dd/MM/yyyy HH:mm');
     }
+
+    if (isEdited && editedAt) {
+      const editedDate = new Date(editedAt);
+      const formattedEditedTime = format(editedDate, 'HH:mm');
+      return `${formattedTime} (Edited ${formattedEditedTime})`;
+    }
+    return formattedTime;
   };
 
   const formatDateSeparator = (timestamp: string) => {
@@ -270,6 +298,7 @@ const ChatPage = () => {
                       </div>
                       {group.messages.map((msg) => {
                         const isCurrentUser = msg.user_id === user?.id;
+                        const isCurrentlyEditing = editingMessageId === msg.id;
                         return (
                           <div
                             key={msg.id}
@@ -292,39 +321,50 @@ const ChatPage = () => {
                                   isCurrentUser
                                     ? 'bg-blue-600 text-white'
                                     : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                                }`}
+                                } ${isCurrentlyEditing ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}`}
                               >
                                 <p className="text-base">{msg.content}</p>
                                 <p className="text-xs text-right opacity-75 mt-1">
-                                  {formatMessageTimestamp(msg.created_at)}
+                                  {formatMessageTimestamp(msg.created_at, msg.is_edited, msg.edited_at)}
                                 </p>
-                                {isCurrentUser && (
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        aria-label="Delete message"
-                                      >
-                                        <Trash2 className="h-4 w-4 text-red-500" />
-                                      </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          This action cannot be undone. This will permanently delete your message.
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDeleteMessage(msg.id)}>
-                                          Delete
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
+                                {isCurrentUser && !isCurrentlyEditing && (
+                                  <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      aria-label="Edit message"
+                                      onClick={() => handleEditClick(msg)}
+                                    >
+                                      <Edit className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6"
+                                          aria-label="Delete message"
+                                        >
+                                          <Trash2 className="h-4 w-4 text-red-500" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            This action cannot be undone. This will permanently delete your message.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction onClick={() => handleDeleteMessage(msg.id)}>
+                                            Delete
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -373,7 +413,7 @@ const ChatPage = () => {
           </Popover>
           <Textarea
             ref={inputRef}
-            placeholder={selectedUserName ? `Message ${selectedUserName}...` : "Type your message..."}
+            placeholder={editingMessageId ? "Edit your message..." : (selectedUserName ? `Message ${selectedUserName}...` : "Type your message...")}
             value={newMessage}
             onChange={handleNewMessageChange}
             onKeyDown={handleKeyDown}
@@ -381,9 +421,14 @@ const ChatPage = () => {
             disabled={!user}
             rows={1}
           />
+          {editingMessageId && (
+            <Button type="button" variant="outline" onClick={handleCancelEdit} disabled={!user}>
+              Cancel
+            </Button>
+          )}
           <Button type="submit" disabled={!user || newMessage.trim() === ''} size="icon">
-            <Send className="h-4 w-4" />
-            <span className="sr-only">Send message</span>
+            {editingMessageId ? <Edit className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+            <span className="sr-only">{editingMessageId ? "Update message" : "Send message"}</span>
           </Button>
         </form>
       </CardContent>
