@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { showError } from '@/utils/toast';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Trash2 } from 'lucide-react'; // Import Trash2 icon
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import UserSidebar from '@/components/UserSidebar';
 import MobileSidebar from '@/components/MobileSidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"; // Import AlertDialog components
+} from "@/components/ui/alert-dialog";
 
 const ChatPage = () => {
   const { user } = useAuth();
@@ -132,70 +132,77 @@ const ChatPage = () => {
                     {selectedUserName ? `Start your private chat with ${selectedUserName}!` : 'No messages yet. Start chatting!'}
                   </p>
                 ) : (
-                  messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex items-start gap-2 ${msg.user_id === user?.id ? 'justify-end' : 'justify-start'}`}
-                    >
-                      {msg.user_id !== user?.id && (
-                        <UserAvatar
-                          src={msg.sender_avatar_url}
-                          alt={msg.sender_name}
-                          fallback={msg.sender_name}
-                          className="h-8 w-8"
-                        />
-                      )}
+                  messages.map((msg) => {
+                    const isCurrentUser = msg.user_id === user?.id;
+                    return (
                       <div
-                        className={`max-w-[70%] p-3 rounded-lg relative group ${
-                          msg.user_id === user?.id
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                        }`}
+                        key={msg.id}
+                        className={`flex items-start gap-2 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                       >
-                        <p className="text-sm font-semibold">{msg.sender_name}</p>
-                        <p className="text-base">{msg.content}</p>
-                        <p className="text-xs text-right opacity-75 mt-1">
-                          {new Date(msg.created_at).toLocaleTimeString()}
-                        </p>
-                        {msg.user_id === user?.id && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                aria-label="Delete message"
-                              >
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will permanently delete your message.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteMessage(msg.id)}>
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                        {!isCurrentUser && (
+                          <UserAvatar
+                            src={msg.sender_avatar_url}
+                            alt={msg.sender_name}
+                            fallback={msg.sender_name}
+                            className="h-8 w-8"
+                          />
+                        )}
+                        <div className="flex flex-col">
+                          <span className={`text-xs mb-1 ${isCurrentUser ? 'text-right' : 'text-left'} text-gray-500 dark:text-gray-400`}>
+                            {isCurrentUser ? `You (${msg.sender_name})` : msg.sender_name}
+                          </span>
+                          <div
+                            className={`max-w-[70%] p-3 rounded-lg relative group ${
+                              isCurrentUser
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                            }`}
+                          >
+                            <p className="text-base">{msg.content}</p>
+                            <p className="text-xs text-right opacity-75 mt-1">
+                              {new Date(msg.created_at).toLocaleTimeString()}
+                            </p>
+                            {isCurrentUser && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    aria-label="Delete message"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will permanently delete your message.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteMessage(msg.id)}>
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </div>
+                        {isCurrentUser && (
+                          <UserAvatar
+                            src={msg.sender_avatar_url}
+                            alt={msg.sender_name}
+                            fallback={msg.sender_name}
+                            className="h-8 w-8"
+                          />
                         )}
                       </div>
-                      {msg.user_id === user?.id && (
-                        <UserAvatar
-                          src={msg.sender_avatar_url}
-                          alt={msg.sender_name}
-                          fallback={msg.sender_name}
-                          className="h-8 w-8"
-                        />
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </ScrollArea>
