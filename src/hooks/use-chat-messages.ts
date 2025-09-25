@@ -11,6 +11,8 @@ export interface Message {
   content: string;
   created_at: string;
   receiver_id?: string; // Only present for private messages
+  is_edited: boolean; // New field to indicate if the message has been edited
+  edited_at: string | null; // New field for the last edited timestamp
 }
 
 interface UseChatMessagesProps {
@@ -38,7 +40,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
       // Fetch private messages
       query = supabase
         .from('private_messages')
-        .select('id, sender_id, receiver_id, content, created_at, profiles(display_name, avatar_url)') // Select avatar_url
+        .select('id, sender_id, receiver_id, content, created_at, is_edited, edited_at, profiles(display_name, avatar_url)') // Select new fields
         .or(`and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id})`)
         .order('created_at', { ascending: false }) // Fetch in reverse order to get latest first
         .range(from, to);
@@ -46,7 +48,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
       // Fetch global messages
       query = supabase
         .from('messages')
-        .select('id, user_id, content, created_at, profiles(display_name, avatar_url)') // Select avatar_url
+        .select('id, user_id, content, created_at, is_edited, edited_at, profiles(display_name, avatar_url)') // Select new fields
         .order('created_at', { ascending: false }) // Fetch in reverse order to get latest first
         .range(from, to);
     }
@@ -66,6 +68,8 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
         content: msg.content,
         created_at: msg.created_at,
         receiver_id: selectedUserId ? msg.receiver_id : undefined,
+        is_edited: msg.is_edited || false, // Default to false
+        edited_at: msg.edited_at || null, // Default to null
       })).reverse(); // Reverse back to chronological order
 
       if (append) {
@@ -89,7 +93,7 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     setPage(0);
     setHasMore(true);
     fetchMessages(0);
-  }, [selectedUserId, user, fetchMessages]); // Added user to dependencies
+  }, [selectedUserId, user, fetchMessages]);
 
   useEffect(() => {
     // Fetch messages when page changes (for infinite scrolling)
@@ -129,6 +133,43 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     }
   }, [user]);
 
+  const editMessage = useCallback(async (messageId: string, newContent: string, isPrivate: boolean) => {
+    if (!user) {
+      showError('You must be logged in to edit messages.');
+      return;
+    }
+
+    let error;
+    const updateData = {
+      content: newContent,
+      is_edited: true,
+      edited_at: new Date().toISOString(),
+    };
+
+    if (isPrivate) {
+      const { error: privateError } = await supabase
+        .from('private_messages')
+        .update(updateData)
+        .eq('id', messageId)
+        .eq('sender_id', user.id); // Ensure only sender can edit
+      error = privateError;
+    } else {
+      const { error: globalError } = await supabase
+        .from('messages')
+        .update(updateData)
+        .eq('id', messageId)
+        .eq('user_id', user.id); // Ensure only sender can edit
+      error = globalError;
+    }
+
+    if (error) {
+      showError('Error editing message: ' + error.message);
+    } else {
+      showSuccess('Message updated successfully!');
+      // The real-time listener will update the state, no need to manually update here
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -157,8 +198,40 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
           content: newMsg.content,
           created_at: newMsg.created_at,
           receiver_id: newMsg.receiver_id,
+          is_edited: newMsg.is_edited || false,
+          edited_at: newMsg.edited_at || null,
         },
       ]);
+    };
+
+    const handleUpdateMessage = async (payload: any) => {
+      const updatedMsg = payload.new;
+      const senderId = selectedUserId ? updatedMsg.sender_id : updatedMsg.user_id;
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('display_name, avatar_url')
+        .eq('id', senderId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching sender profile for updated message:', error.message);
+      }
+
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === updatedMsg.id
+            ? {
+                ...msg,
+                content: updatedMsg.content,
+                is_edited: updatedMsg.is_edited || false,
+                edited_at: updatedMsg.edited_at || null,
+                sender_name: profile?.display_name || 'Anonymous', // Ensure sender_name is updated if profile changes
+                sender_avatar_url: profile?.avatar_url || null,
+              }
+            : msg
+        )
+      );
     };
 
     const handleDeleteMessage = (payload: any) => {
@@ -181,6 +254,15 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
       ).on(
         'postgres_changes',
         {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'private_messages',
+          filter: `or(and(sender_id.eq.${user.id},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${user.id}))`,
+        },
+        handleUpdateMessage
+      ).on(
+        'postgres_changes',
+        {
           event: 'DELETE',
           schema: 'public',
           table: 'private_messages',
@@ -196,6 +278,10 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
         handleNewMessage
       ).on(
         'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages' },
+        handleUpdateMessage
+      ).on(
+        'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'messages' },
         handleDeleteMessage
       ).subscribe();
@@ -208,5 +294,5 @@ export const useChatMessages = ({ selectedUserId }: UseChatMessagesProps) => {
     };
   }, [selectedUserId, user]);
 
-  return { messages, loadingMessages, setMessages, deleteMessage, hasMore, loadMoreMessages };
+  return { messages, loadingMessages, setMessages, deleteMessage, editMessage, hasMore, loadMoreMessages };
 };
