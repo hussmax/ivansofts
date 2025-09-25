@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; // Keep Input for now, but will replace with Textarea
 import { CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/context/AuthContext';
@@ -29,7 +28,8 @@ import {
 import ChatLayout from '@/components/ChatLayout';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import { Textarea } from '@/components/ui/textarea'; // Import Textarea
+import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton for loading indicator
 
 const ChatPage = () => {
   const { user, typingUsers, sendTypingStatus } = useAuth();
@@ -38,22 +38,39 @@ const ChatPage = () => {
   const [selectedUserName, setSelectedUserName] = useState<string | null>(null);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null); // Change ref type to HTMLTextAreaElement
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialScrollDone = useRef(false); // To track initial scroll to bottom
 
-  const { messages, loadingMessages, setMessages, deleteMessage } = useChatMessages({ selectedUserId });
+  const { messages, loadingMessages, setMessages, deleteMessage, hasMore, loadMoreMessages } = useChatMessages({ selectedUserId });
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTo({
         top: scrollAreaRef.current.scrollHeight,
-        behavior: 'smooth',
+        behavior: behavior,
       });
     }
-  }, [messages]);
+  }, []);
 
+  // Scroll to bottom on initial load or when selected user changes
   useEffect(() => {
-    scrollToBottom();
+    if (!loadingMessages && !initialScrollDone.current) {
+      scrollToBottom('auto'); // Use 'auto' for initial scroll to prevent jarring animation
+      initialScrollDone.current = true;
+    }
+  }, [loadingMessages, scrollToBottom]);
+
+  // Scroll to bottom when new messages arrive (if already at bottom)
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 20; // Threshold for "at bottom"
+
+      if (isAtBottom) {
+        scrollToBottom();
+      }
+    }
   }, [messages, scrollToBottom]);
 
   // Auto-focus the input when selected user changes
@@ -63,14 +80,42 @@ const ChatPage = () => {
     }
   }, [selectedUserId, selectedUserName]);
 
+  const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop } = event.currentTarget;
+    if (scrollTop === 0 && hasMore && !loadingMessages) {
+      const oldScrollHeight = event.currentTarget.scrollHeight;
+      loadMoreMessages();
+      // After loading, adjust scroll position to maintain view
+      // This needs to be done after messages are updated, so it's handled in the next effect
+    }
+  }, [hasMore, loadingMessages, loadMoreMessages]);
+
+  // Effect to adjust scroll position after loading older messages
+  useEffect(() => {
+    if (scrollAreaRef.current && !loadingMessages && messages.length > 0) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+      // Only adjust if we were at the top before loading more
+      if (scrollTop === 0 && scrollHeight > clientHeight) {
+        // This is a bit tricky. We need to wait for the DOM to update with new messages
+        // and then set the scroll position. A small timeout can help.
+        const prevScrollHeight = scrollAreaRef.current.dataset.prevScrollHeight ? parseInt(scrollAreaRef.current.dataset.prevScrollHeight) : 0;
+        if (prevScrollHeight > 0 && scrollHeight > prevScrollHeight) {
+          scrollAreaRef.current.scrollTop = scrollHeight - prevScrollHeight;
+        }
+      }
+      scrollAreaRef.current.dataset.prevScrollHeight = scrollAreaRef.current.scrollHeight.toString();
+    }
+  }, [messages, loadingMessages]);
+
+
   const handleSendMessage = async (e: React.FormEvent | React.KeyboardEvent) => {
-    e.preventDefault(); // Prevent default form submission or new line for Enter key
+    e.preventDefault();
     if (newMessage.trim() === '' || !user) return;
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    await sendTypingStatus(false, selectedUserId); // Stop typing when message is sent
+    await sendTypingStatus(false, selectedUserId);
 
     if (selectedUserId) {
       const { error } = await supabase.from('private_messages').insert({
@@ -106,14 +151,14 @@ const ChatPage = () => {
     setSelectedUserId(userId);
     setSelectedUserName(userName);
     setMessages([]); // Clear messages when switching users
+    initialScrollDone.current = false; // Reset for new chat
   };
 
-  const handleNewMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => { // Change event type
+  const handleNewMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewMessage(e.target.value);
 
     if (!user) return;
 
-    // Send typing status with the correct context
     sendTypingStatus(true, selectedUserId);
 
     if (typingTimeoutRef.current) {
@@ -121,7 +166,7 @@ const ChatPage = () => {
     }
 
     typingTimeoutRef.current = setTimeout(() => {
-      sendTypingStatus(false, selectedUserId); // Stop typing after a delay
+      sendTypingStatus(false, selectedUserId);
     }, 3000);
   };
 
@@ -133,8 +178,8 @@ const ChatPage = () => {
 
   const onEmojiClick = (emojiData: EmojiClickData) => {
     setNewMessage((prevMsg) => prevMsg + emojiData.emoji);
-    setIsEmojiPickerOpen(false); // Close picker after selection
-    inputRef.current?.focus(); // Re-focus input
+    setIsEmojiPickerOpen(false);
+    inputRef.current?.focus();
   };
 
   const formatMessageTimestamp = (timestamp: string) => {
@@ -176,13 +221,12 @@ const ChatPage = () => {
 
   const groupedMessages = groupMessagesByDate(messages);
 
-  // Filter typing users based on the current chat context
   const currentChatTypingUsers = typingUsers.filter(
     (typingUser) =>
-      typingUser.id !== user?.id && // Exclude current user
+      typingUser.id !== user?.id &&
       (
-        (selectedUserId === null && typingUser.typingToUserId === null) || // Global chat: show only global typers
-        (selectedUserId !== null && typingUser.typingToUserId === user?.id && typingUser.id === selectedUserId) // Private chat: show only the other user typing to current user
+        (selectedUserId === null && typingUser.typingToUserId === null) ||
+        (selectedUserId !== null && typingUser.typingToUserId === user?.id && typingUser.id === selectedUserId)
       )
   );
 
@@ -193,103 +237,112 @@ const ChatPage = () => {
       onSelectUser={handleSelectUser}
     >
       <CardContent className="flex-1 p-4 overflow-hidden flex flex-col">
-        <ScrollArea ref={scrollAreaRef} className="flex-1 pr-4 mb-4">
+        <ScrollArea ref={scrollAreaRef} onScroll={handleScroll} className="flex-1 pr-4 mb-4">
           <div className="space-y-4">
-            {loadingMessages ? (
+            {loadingMessages && messages.length === 0 ? (
               <p className="text-center text-gray-500 dark:text-gray-400">Loading messages...</p>
-            ) : messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 py-10">
-                <MessageCircle className="h-12 w-12 mb-4" />
-                <p className="text-lg font-medium">
-                  {selectedUserName ? `Start your private chat with ${selectedUserName}!` : 'No messages yet. Start chatting!'}
-                </p>
-              </div>
             ) : (
-              groupedMessages.map((group, groupIndex) => (
-                <React.Fragment key={group.date}>
-                  <div className="relative my-6 flex items-center justify-center">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-gray-300 dark:border-gray-600" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-gray-500 dark:text-gray-400">
-                        {formatDateSeparator(group.date)}
-                      </span>
-                    </div>
+              <>
+                {loadingMessages && hasMore && messages.length > 0 && (
+                  <div className="flex justify-center py-2">
+                    <Skeleton className="h-4 w-3/4 animate-pulse" />
                   </div>
-                  {group.messages.map((msg) => {
-                    const isCurrentUser = msg.user_id === user?.id;
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex items-start gap-2 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-                      >
-                        {!isCurrentUser && (
-                          <UserAvatar
-                            src={msg.sender_avatar_url}
-                            alt={msg.sender_name}
-                            fallback={msg.sender_name}
-                            className="h-8 w-8"
-                          />
-                        )}
-                        <div className="flex flex-col">
-                          <span className={`text-xs mb-1 ${isCurrentUser ? 'text-right' : 'text-left'} text-gray-500 dark:text-gray-400`}>
-                            {isCurrentUser ? 'You' : msg.sender_name}
+                )}
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 py-10">
+                    <MessageCircle className="h-12 w-12 mb-4" />
+                    <p className="text-lg font-medium">
+                      {selectedUserName ? `Start your private chat with ${selectedUserName}!` : 'No messages yet. Start chatting!'}
+                    </p>
+                  </div>
+                ) : (
+                  groupedMessages.map((group, groupIndex) => (
+                    <React.Fragment key={group.date}>
+                      <div className="relative my-6 flex items-center justify-center">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t border-gray-300 dark:border-gray-600" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-background px-2 text-gray-500 dark:text-gray-400">
+                            {formatDateSeparator(group.date)}
                           </span>
+                        </div>
+                      </div>
+                      {group.messages.map((msg) => {
+                        const isCurrentUser = msg.user_id === user?.id;
+                        return (
                           <div
-                            className={`max-w-[70%] p-3 rounded-lg relative group shadow-sm ${
-                              isCurrentUser
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                            }`}
+                            key={msg.id}
+                            className={`flex items-start gap-2 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                           >
-                            <p className="text-base">{msg.content}</p>
-                            <p className="text-xs text-right opacity-75 mt-1">
-                              {formatMessageTimestamp(msg.created_at)}
-                            </p>
+                            {!isCurrentUser && (
+                              <UserAvatar
+                                src={msg.sender_avatar_url}
+                                alt={msg.sender_name}
+                                fallback={msg.sender_name}
+                                className="h-8 w-8"
+                              />
+                            )}
+                            <div className="flex flex-col">
+                              <span className={`text-xs mb-1 ${isCurrentUser ? 'text-right' : 'text-left'} text-gray-500 dark:text-gray-400`}>
+                                {isCurrentUser ? 'You' : msg.sender_name}
+                              </span>
+                              <div
+                                className={`max-w-[70%] p-3 rounded-lg relative group shadow-sm ${
+                                  isCurrentUser
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                                }`}
+                              >
+                                <p className="text-base">{msg.content}</p>
+                                <p className="text-xs text-right opacity-75 mt-1">
+                                  {formatMessageTimestamp(msg.created_at)}
+                                </p>
+                                {isCurrentUser && (
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        aria-label="Delete message"
+                                      >
+                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          This action cannot be undone. This will permanently delete your message.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteMessage(msg.id)}>
+                                          Delete
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                )}
+                              </div>
+                            </div>
                             {isCurrentUser && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    aria-label="Delete message"
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This action cannot be undone. This will permanently delete your message.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDeleteMessage(msg.id)}>
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                              <UserAvatar
+                                src={msg.sender_avatar_url}
+                                alt={msg.sender_name}
+                                fallback={msg.sender_name}
+                                className="h-8 w-8"
+                              />
                             )}
                           </div>
-                        </div>
-                        {isCurrentUser && (
-                          <UserAvatar
-                            src={msg.sender_avatar_url}
-                            alt={msg.sender_name}
-                            fallback={msg.sender_name}
-                            className="h-8 w-8"
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </React.Fragment>
-              ))
+                        );
+                      })}
+                    </React.Fragment>
+                  ))
+                )}
+              </>
             )}
           </div>
         </ScrollArea>
@@ -300,7 +353,7 @@ const ChatPage = () => {
             ))}
           </div>
         )}
-        <form onSubmit={handleSendMessage} className="flex gap-2 items-end"> {/* Align items to end for textarea */}
+        <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
           <Popover open={isEmojiPickerOpen} onOpenChange={setIsEmojiPickerOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -318,15 +371,15 @@ const ChatPage = () => {
               <EmojiPicker onEmojiClick={onEmojiClick} theme="auto" />
             </PopoverContent>
           </Popover>
-          <Textarea // Changed from Input to Textarea
+          <Textarea
             ref={inputRef}
             placeholder={selectedUserName ? `Message ${selectedUserName}...` : "Type your message..."}
             value={newMessage}
             onChange={handleNewMessageChange}
             onKeyDown={handleKeyDown}
-            className="flex-1 min-h-[40px] max-h-[120px] resize-y" // Added styling for textarea
+            className="flex-1 min-h-[40px] max-h-[120px] resize-y"
             disabled={!user}
-            rows={1} // Start with 1 row
+            rows={1}
           />
           <Button type="submit" disabled={!user || newMessage.trim() === ''} size="icon">
             <Send className="h-4 w-4" />
