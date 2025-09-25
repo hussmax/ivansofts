@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import UserAvatar from './UserAvatar';
 import { Input } from '@/components/ui/input';
+import { Link } from 'react-router-dom'; // Import Link
 
 interface UserProfile {
   id: string;
@@ -103,6 +104,23 @@ const UserSidebar = ({ onSelectUser, selectedUserId }: UserSidebarProps) => {
         ) : (
           <ScrollArea className="h-full pr-4">
             <div className="space-y-2">
+              {/* Current User Profile */}
+              {currentUser && (
+                <Link to="/profile" className="block">
+                  <div className="flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 bg-gray-50 dark:bg-gray-800">
+                    <UserAvatar
+                      src={currentUser.avatar_url}
+                      alt={currentUser.display_name || currentUser.phone || 'You'}
+                      fallback={currentUser.display_name || currentUser.phone || 'You'}
+                      className="h-8 w-8"
+                    />
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {currentUser.display_name || currentUser.phone || 'You'} (You)
+                    </span>
+                  </div>
+                </Link>
+              )}
+
               {/* Option to go back to Global Chat */}
               <div
                 className={cn(
